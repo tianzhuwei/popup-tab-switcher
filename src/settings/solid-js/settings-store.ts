@@ -10,6 +10,7 @@ export interface IStoreSettingsService {
 
 interface ISettingsStoreProps {
   areShortcutsEnabled: boolean
+  isShortcutsBannerVisible: boolean
   initialSettings: ISettings
   settingsService: IStoreSettingsService
 }
@@ -19,6 +20,7 @@ export interface ISettingsStore {
   restoreDefaultSettings: () => Promise<void>
   setCurrentPageTab: (tabId: string) => void
   setKeyboardShortcutsEnabled: (enabled: boolean) => void
+  setShortcutsBannerVisible: (visible: boolean) => void
   setSettingsOptions: (options: Partial<ISettings>) => void
   store: ISettingsStoreObject
 }
@@ -27,6 +29,7 @@ export interface ISettingsStoreObject {
   settings: ISettings
   currentPageTabId: string
   isKeyboardShortcutsEnabled: boolean
+  isShortcutsBannerVisible: boolean
 }
 
 export const enum PageTab {
@@ -38,16 +41,15 @@ export function createSettingsStore({
   settingsService,
   initialSettings,
   areShortcutsEnabled,
+  isShortcutsBannerVisible,
 }: ISettingsStoreProps): ISettingsStore {
-  const pageTabs: IPageTab[] = [
-    {id: PageTab.Settings, icon: 'settings'},
-    {id: PageTab.Contribute, icon: 'favorite'},
-  ]
+  const pageTabs: IPageTab[] = [{id: PageTab.Settings, icon: 'settings'}]
 
   const [store, setStore] = createStore<ISettingsStoreObject>({
     settings: initialSettings, // Store can work only with plain objects.
     currentPageTabId: PageTab.Settings,
     isKeyboardShortcutsEnabled: areShortcutsEnabled,
+    isShortcutsBannerVisible,
   })
 
   return {
@@ -55,6 +57,7 @@ export function createSettingsStore({
     restoreDefaultSettings,
     setCurrentPageTab,
     setKeyboardShortcutsEnabled,
+    setShortcutsBannerVisible,
     setSettingsOptions,
     store,
   }
@@ -65,6 +68,10 @@ export function createSettingsStore({
 
   function setKeyboardShortcutsEnabled(enabled: boolean) {
     setStore({isKeyboardShortcutsEnabled: enabled})
+  }
+
+  function setShortcutsBannerVisible(visible: boolean) {
+    setStore({isShortcutsBannerVisible: visible})
   }
 
   function setSettingsOptions(options: Partial<ISettings>) {

@@ -53,3 +53,21 @@ export function TabIcon(props: {url: string | undefined}) {
     </Show>
   )
 }
+
+export function PinIcon(props: {isPinned: boolean}) {
+  return (
+    <svg
+      class="tab__pinIcon"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M16 4V10L18 11.5V13H12.5V20L12 22L11.5 20V13H6V11.5L8 10V4H7V2H17V4H16ZM14 10V4H10V10L8.5 11H15.5L14 10Z"
+        fill="currentColor"
+        fill-opacity={props.isPinned ? 1 : 0.5}
+      />
+    </svg>
+  )
+}

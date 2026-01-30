@@ -10,6 +10,7 @@ import {MButton} from './components/m-button/m-button'
 interface IProps {
   store: ISettingsStoreObject
   setKeyboardShortcutsEnabled: (enabled: boolean) => void
+  setShortcutsBannerVisible: (visible: boolean) => void
   setSettingsOptions: (options: Partial<ISettings>) => void
   restoreDefaultSettings: () => void
 }
@@ -17,18 +18,20 @@ interface IProps {
 export function SettingsForm(props: IProps) {
   return (
     <form class="settings__form">
-      <Show when={!props.store.isKeyboardShortcutsEnabled}>
+      <Show when={!props.store.isKeyboardShortcutsEnabled && props.store.isShortcutsBannerVisible}>
         <MBanner
           icon="report_problem"
-          message="Keyboard shortcuts for the extension are not configured. You should set them in Chrome settings"
+          message="Keyboard shortcuts are not configured. You can set them in Chrome settings."
           actionMessage="Set up shortcuts"
           onAction={() => {
+            props.setShortcutsBannerVisible(false)
             chrome.tabs.create({
               active: true,
               url: 'chrome://extensions/shortcuts#:~:text=Popup%20Tab%20Switcher',
             })
           }}
           onDismiss={() => {
+            props.setShortcutsBannerVisible(false)
             props.setKeyboardShortcutsEnabled(true)
           }}
         />

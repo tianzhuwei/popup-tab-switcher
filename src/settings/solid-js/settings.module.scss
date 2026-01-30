@@ -5,35 +5,50 @@
   body {
     margin: 0;
     user-select: none;
-    width: 340px;
+    width: 380px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
+      'Open Sans', 'Helvetica Neue', sans-serif;
   }
 }
 
 .settings {
-  --settings-background-color: white;
+  --settings-background-color: #{$color-gray-50};
+  --settings-card-background: white;
+  --settings-border-color: #{$color-gray-200};
+  --settings-text-primary: #{$color-gray-800};
+  --settings-text-secondary: #{$color-gray-500};
+  --settings-accent-color: #{$color-blue-primary};
+  --settings-row-hover: #{$color-gray-100};
 
   $theme-light: (
-    'primary': $color-blue-mariner,
-    'secondary': $color-blue-mariner-light,
-    'background': white,
+    'primary': $color-blue-primary,
+    'secondary': $color-blue-light,
+    'background': $color-gray-50,
     'surface': white,
   );
 
   $colors: get-theme-colors($theme-light);
   @include theme-colors-as-custom-properties($colors);
 
-  min-height: 100%;
+  min-height: 100vh;
   background-color: var(--settings-background-color);
-  color: var(--mdc-theme-text-primary-on-background);
+  color: var(--settings-text-primary);
+  padding-bottom: 16px;
 
   &_dark {
-    --settings-background-color: #{$color-gray-shark};
+    --settings-background-color: #{$color-dark-bg};
+    --settings-card-background: #{$color-dark-surface};
+    --settings-border-color: #{$color-dark-border};
+    --settings-text-primary: #{$color-dark-text};
+    --settings-text-secondary: #{$color-dark-text-secondary};
+    --settings-accent-color: #{$color-blue-lighter};
+    --settings-row-hover: #{$color-dark-surface-hover};
 
     $theme-dark: (
-      'primary': darken(white, 20%),
-      'secondary': $color-blue-mariner-light,
-      'background': $color-gray-shark,
-      'surface': $color-gray-shark,
+      'primary': $color-blue-lighter,
+      'secondary': $color-blue-light,
+      'background': $color-dark-bg,
+      'surface': $color-dark-surface,
     );
 
     $colors: get-theme-colors($theme-dark);
@@ -43,6 +58,7 @@
 
 .settings__form {
   margin: 0;
+  padding: 8px 12px;
 }
 
 .settings__row {
@@ -51,21 +67,39 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 5px 16px 5px 10px;
-  height: 40px;
+  padding: 12px 16px;
+  height: auto;
+  min-height: 48px;
+  background: var(--settings-card-background);
+  border-radius: 12px;
+  margin-bottom: 8px;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+  border: 1px solid var(--settings-border-color);
+
+  &:hover {
+    background-color: var(--settings-row-hover);
+  }
 }
 
 .bottomActions {
   composes: settings__row;
-
   flex-direction: row-reverse;
+  background: transparent;
+  border: none;
+  margin-top: 16px;
+
+  &:hover {
+    background: transparent;
+  }
 }
 
 .iconInLabel {
   composes: materialIcon from global;
 
-  margin-right: 6px;
-  color: var(--mdc-theme-text-icon-on-background);
+  margin-right: 12px;
+  color: var(--settings-accent-color);
+  font-size: 20px;
+  opacity: 0.9;
 }
 
 .settings__label {
@@ -73,4 +107,8 @@
   width: 100%;
   display: flex;
   align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--settings-text-primary);
+  letter-spacing: -0.01em;
 }

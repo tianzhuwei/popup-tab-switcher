@@ -1,14 +1,16 @@
 import {Show} from 'solid-js/web'
 import {createEffect} from 'solid-js'
-import {TabCornerIcon, TabIcon} from './icons'
+import {TabIcon, PinIcon} from './icons'
 
 interface IProps {
   isSelected: boolean
   isTimeoutShown: boolean
   isLast: boolean
   isFirst: boolean
+  isPinned: boolean
   tab: chrome.tabs.Tab
   onClick: () => void
+  onTogglePin: () => void
   textScrollSpeed: number
   textScrollDelay: number
 }
@@ -27,6 +29,11 @@ export function PopupTab(props: IProps) {
     }
   })
 
+  function handlePinClick(e: MouseEvent) {
+    e.stopPropagation()
+    props.onTogglePin()
+  }
+
   return (
     <div
       ref={tabElement!}
@@ -34,6 +41,7 @@ export function PopupTab(props: IProps) {
       class="tab"
       classList={{
         tab_selected: props.isSelected,
+        tab_pinned: props.isPinned,
       }}
       onClick={props.onClick}
     >
@@ -41,17 +49,21 @@ export function PopupTab(props: IProps) {
         <div class="tab__timeoutIndicator" />
       </Show>
       <TabIcon url={props.tab.url} />
-      <Show when={!props.isFirst}>
-        <TabCornerIcon type="top" />
-      </Show>
-      <Show when={!props.isLast}>
-        <TabCornerIcon type="bottom" />
-      </Show>
       <div ref={tabTextElement!} class="tab__text">
         <span class="tab__textContent" ref={tabTextContentElement!}>
           {props.tab.title}
         </span>
       </div>
+      <button
+        class="tab__pinButton"
+        classList={{
+          tab__pinButton_pinned: props.isPinned,
+        }}
+        onClick={handlePinClick}
+        title={props.isPinned ? 'Unpin tab' : 'Pin tab'}
+      >
+        <PinIcon isPinned={props.isPinned} />
+      </button>
     </div>
   )
 

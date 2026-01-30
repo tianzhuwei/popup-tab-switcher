@@ -1,9 +1,7 @@
-import {Match, render, Switch} from 'solid-js/web'
+import {render} from 'solid-js/web'
 import styles from './settings.module.scss'
-import {createSettingsStore, ISettingsStore, IStoreSettingsService, PageTab} from './settings-store'
-import {MTabBar} from './components/m-tab-bar'
+import {createSettingsStore, ISettingsStore, IStoreSettingsService} from './settings-store'
 import {SettingsForm} from './settings-form'
-import {Contribute} from './contribute/contribute'
 import areShortcutsSet from '../../utils/are-shortcuts-set'
 
 interface ISettingsProps {
@@ -13,9 +11,8 @@ interface ISettingsProps {
 export function Settings(props: ISettingsProps) {
   const {
     store,
-    pageTabs,
-    setCurrentPageTab,
     setKeyboardShortcutsEnabled,
+    setShortcutsBannerVisible,
     setSettingsOptions,
     restoreDefaultSettings,
   } = props.settingsStore
@@ -25,38 +22,38 @@ export function Settings(props: ISettingsProps) {
       classList={{[styles.settings_dark]: store.settings.isDarkTheme}}
       data-test="settings"
     >
-      <MTabBar
-        tabs={pageTabs}
-        initialTabId={store.currentPageTabId}
-        onTabActivated={setCurrentPageTab}
+      <SettingsForm
+        store={store}
+        setKeyboardShortcutsEnabled={setKeyboardShortcutsEnabled}
+        setShortcutsBannerVisible={setShortcutsBannerVisible}
+        setSettingsOptions={setSettingsOptions}
+        restoreDefaultSettings={restoreDefaultSettings}
       />
-      <Switch fallback={<div>Not Found</div>}>
-        <Match when={PageTab.Settings === store.currentPageTabId}>
-          <SettingsForm
-            store={store}
-            setKeyboardShortcutsEnabled={setKeyboardShortcutsEnabled}
-            setSettingsOptions={setSettingsOptions}
-            restoreDefaultSettings={restoreDefaultSettings}
-          />
-        </Match>
-        <Match when={PageTab.Contribute === store.currentPageTabId}>
-          <Contribute />
-        </Match>
-      </Switch>
     </div>
   )
 }
 
 export async function renderSettingsPage(settingsService: IStoreSettingsService) {
-  const [initialSettings, areShortcutsEnabled] = await Promise.all([
+  const [initialSettings, areShortcutsEnabled, shortcutsBannerSeen] = await Promise.all([
     settingsService.getSettingsObject(),
     areShortcutsSet(),
+    getShortcutsBannerSeen(),
   ])
+  const isShortcutsBannerVisible = !areShortcutsEnabled && !shortcutsBannerSeen
+  if (isShortcutsBannerVisible) {
+    chrome.storage.local.set({shortcutsBannerSeen: true})
+  }
   const settingsStore = await createSettingsStore({
     settingsService,
     initialSettings,
     areShortcutsEnabled,
+    isShortcutsBannerVisible,
   })
   window.settings = initialSettings
   render(() => <Settings settingsStore={settingsStore} />, document.body)
+}
+
+async function getShortcutsBannerSeen(): Promise<boolean> {
+  const {shortcutsBannerSeen} = await chrome.storage.local.get('shortcutsBannerSeen')
+  return Boolean(shortcutsBannerSeen)
 }

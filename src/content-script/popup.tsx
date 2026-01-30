@@ -27,13 +27,27 @@ if (E2E) {
 }
 
 export function Popup({element}: IProps) {
-  const {store, syncStoreWithBackground, openPopup, closePopup, selectNextTab} = createPopupStore()
+  const {
+    store,
+    syncStoreWithBackground,
+    openPopup,
+    closePopup,
+    selectNextTab,
+    togglePin,
+    isPinned,
+  } = createPopupStore()
   // Prevents auto switching when the popup is opened.
   let isSettingsDemo = false
   // Stores the last active element before the popup was opened.
   const selectionAndFocus = new SelectionAndFocus()
   let cleanUpListeners = () => {}
   let disposeAutoSwitchingTimeout: () => void = () => {}
+
+  // Mouse hover state tracking
+  let isMouseOverCard = false
+  let mouseIdleTimeout: number | undefined
+  const MOUSE_IDLE_DURATION = 3000
+  let suppressAutoCloseUntil = 0
 
   onMount(() => {
     log(`[start switcher]`)
@@ -45,6 +59,7 @@ export function Popup({element}: IProps) {
     log(`[stop switcher]`)
     cleanUpListeners()
     disposeAutoSwitchingTimeout()
+    clearMouseIdleTimeout()
     chrome.runtime.sendMessage(contentScriptStopped())
   })
 
@@ -57,6 +72,8 @@ export function Popup({element}: IProps) {
     } else {
       element.style.display = 'none'
       selectionAndFocus.apply()
+      isMouseOverCard = false
+      clearMouseIdleTimeout()
     }
   })
 
@@ -65,7 +82,14 @@ export function Popup({element}: IProps) {
       <style>{styles}</style>
       <Show when={store.isOpen}>
         <div class="overlay">
-          <div class="card" classList={{card_dark: store.settings.isDarkTheme}} data-test="card">
+          <div
+            class="card"
+            classList={{card_dark: store.settings.isDarkTheme}}
+            data-test="card"
+            onMouseEnter={onMouseEnterCard}
+            onMouseLeave={onMouseLeaveCard}
+            onMouseMove={onMouseMoveOnCard}
+          >
             <For each={store.tabs}>
               {(tab, index) => (
                 <PopupTab
@@ -74,6 +98,8 @@ export function Popup({element}: IProps) {
                   isLast={index() === store.tabs.length - 1}
                   isSelected={index() === store.selectedTabIndex}
                   isTimeoutShown={index() === store.selectedTabIndex && !document.hasFocus()}
+                  isPinned={isPinned(tab.id!)}
+                  onTogglePin={() => togglePin(tab.id!)}
                   onClick={() => {
                     switchTo(tab)
                   }}
@@ -112,14 +138,18 @@ export function Popup({element}: IProps) {
     */
     const {fontSize, numberOfTabsToShow, tabHeight, popupWidth, iconSize} = store.settings
     const zoomFactor = store.zoomFactor
-    const popupHeight = numberOfTabsToShow * tabHeight
-    const popupBorderRadius = 8
-    const tabHorizontalPadding = 10
-    const tabTextPadding = 10
-    const tabTimeoutIndicatorHeight = 2
+    // Dynamic height: adapts to actual tab count, but capped at numberOfTabsToShow
+    const actualTabCount = store.tabs.length
+    const displayTabCount = Math.min(actualTabCount, numberOfTabsToShow)
+    // Calculate max height for scrolling when tabs exceed the limit
+    const maxPopupHeight = numberOfTabsToShow * tabHeight + 12 // 12px for padding (6px top + 6px bottom)
+    const popupBorderRadius = 12
+    const tabHorizontalPadding = 12
+    const tabTextPadding = 12
+    const tabTimeoutIndicatorHeight = 3
 
     element.style.setProperty('--popup-width', `${popupWidth / zoomFactor}px`)
-    element.style.setProperty('--popup-height', `${popupHeight / zoomFactor}px`)
+    element.style.setProperty('--popup-max-height', `${maxPopupHeight / zoomFactor}px`)
     element.style.setProperty('--popup-border-radius', `${popupBorderRadius / zoomFactor}px`)
     element.style.setProperty('--tab-height', `${tabHeight / zoomFactor}px`)
     element.style.setProperty('--tab-horizontal-padding', `${tabHorizontalPadding / zoomFactor}px`)
@@ -155,11 +185,19 @@ export function Popup({element}: IProps) {
   }
 
   function setUpListeners() {
+    const cardElement = element.shadowRoot?.querySelector('.card')
+
     element.addEventListener('click', onOverlayClick, {capture: true})
     window.addEventListener('keyup', onKeyUp, {capture: true})
     window.addEventListener('keydown', onKeyDown, {capture: true})
     window.addEventListener('blur', onWindowBlur, {capture: true})
     window.addEventListener('resize', onWindowResize, {capture: true})
+
+    if (cardElement) {
+      cardElement.addEventListener('mouseenter', onMouseEnterCard)
+      cardElement.addEventListener('mouseleave', onMouseLeaveCard)
+      cardElement.addEventListener('mousemove', onMouseMoveOnCard)
+    }
 
     const messageListener = handleMessage({
       [Message.DEMO_SETTINGS]: async () => {
@@ -199,6 +237,11 @@ export function Popup({element}: IProps) {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('blur', onWindowBlur)
       window.removeEventListener('resize', onWindowResize)
+      if (cardElement) {
+        cardElement.removeEventListener('mouseenter', onMouseEnterCard)
+        cardElement.removeEventListener('mouseleave', onMouseLeaveCard)
+        cardElement.removeEventListener('mousemove', onMouseMoveOnCard)
+      }
       chrome.runtime.onMessage.removeListener(messageListener)
       disposeFixUnfocusedDocumentInPdfFiles()
     }
@@ -235,8 +278,13 @@ export function Popup({element}: IProps) {
     if (!store.isOpen || store.settings.isStayingOpen) {
       return
     }
+    if (Date.now() < suppressAutoCloseUntil) {
+      return
+    }
     if (['Alt', 'Control', 'Meta'].includes(event.key)) {
-      switchTo(store.tabs[store.selectedTabIndex])
+      if (!isMouseOverCard) {
+        switchTo(store.tabs[store.selectedTabIndex])
+      }
       event.preventDefault()
       event.stopPropagation()
     }
@@ -246,7 +294,55 @@ export function Popup({element}: IProps) {
     if (event.target !== window || isSettingsDemo) {
       return
     }
-    closePopup()
+    if (Date.now() < suppressAutoCloseUntil) {
+      return
+    }
+    if (!isMouseOverCard) {
+      closePopup()
+    }
+  }
+
+  function onMouseEnterCard() {
+    isMouseOverCard = true
+    resetMouseIdleTimeout()
+  }
+
+  function onMouseLeaveCard() {
+    if (Date.now() < suppressAutoCloseUntil) {
+      // Keep mouse state active during suppression to prevent premature closing
+      isMouseOverCard = true
+      resetMouseIdleTimeout()
+      return
+    }
+    isMouseOverCard = false
+    clearMouseIdleTimeout()
+    if (store.isOpen && !store.settings.isStayingOpen) {
+      closePopup()
+    }
+  }
+
+  function onMouseMoveOnCard() {
+    resetMouseIdleTimeout()
+  }
+
+  function resetMouseIdleTimeout() {
+    clearMouseIdleTimeout()
+    mouseIdleTimeout = window.setTimeout(() => {
+      if (isMouseOverCard && store.isOpen && !store.settings.isStayingOpen) {
+        closePopup()
+      }
+    }, MOUSE_IDLE_DURATION)
+  }
+
+  function clearMouseIdleTimeout() {
+    if (mouseIdleTimeout !== undefined) {
+      window.clearTimeout(mouseIdleTimeout)
+      mouseIdleTimeout = undefined
+    }
+  }
+
+  function suppressAutoClose(duration = 3000) {
+    suppressAutoCloseUntil = Date.now() + duration
   }
 
   /**

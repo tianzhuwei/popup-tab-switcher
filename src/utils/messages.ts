@@ -25,6 +25,7 @@ export enum Message {
   SWITCH_TAB = 'SWITCH_TAB',
   PopupShown = 'PopupShown',
   GetRenderingTime = 'GetRenderingTime',
+  TogglePinTab = 'TogglePinTab',
 }
 
 export function demoSettings() {
@@ -98,6 +99,10 @@ export function getModel() {
   return {type: Message.GET_MODEL} as const
 }
 
+export function togglePinTab(tabId: number) {
+  return {type: Message.TogglePinTab, tabId} as const
+}
+
 interface IMessageTypeToObjectMap {
   [Message.CLOSE_POPUP]: ReturnType<typeof closePopup>
   [Message.COMMAND]: ReturnType<typeof command>
@@ -116,6 +121,7 @@ interface IMessageTypeToObjectMap {
   [Message.SWITCH_TAB]: ReturnType<typeof switchTab>
   [Message.PopupShown]: ReturnType<typeof popupShown>
   [Message.GetRenderingTime]: ReturnType<typeof getRenderingTime>
+  [Message.TogglePinTab]: ReturnType<typeof togglePinTab>
 }
 
 export type IMessage = IMessageTypeToObjectMap[keyof IMessageTypeToObjectMap]
@@ -124,6 +130,7 @@ export interface IGetModelResponse {
   settings: ISettings
   tabs: chrome.tabs.Tab[]
   zoomFactor: number
+  pinnedTabIds: number[]
 }
 
 export type IMessageResponse<Message extends IMessage> = Message extends ReturnType<typeof getModel>

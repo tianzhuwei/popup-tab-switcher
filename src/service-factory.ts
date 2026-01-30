@@ -23,19 +23,27 @@ export class ServiceFactory {
     if (ServiceFactory.registryCache) {
       return ServiceFactory.registryCache
     }
-    const [settings, openTabs, savedTabs] = await Promise.all([
+    const [settings, openTabs, savedTabs, pinnedTabIds] = await Promise.all([
       ServiceFactory.getSettings(),
       getOpenTabs(),
       getSavedTabs(),
+      getSavedPinnedTabIds(),
     ])
     const registry = TabRegistryFactory.create({
       numberOfTabsToShow: settings.numberOfTabsToShow,
       openTabs,
       savedTabs,
+      pinnedTabIds,
       onTabsUpdate: saveTabs,
+      onPinnedUpdate: savePinnedTabIds,
     })
     ServiceFactory.registryCache = registry
-    log(`[Registry initialized]`, {openTabs, savedTabs, registryTitles: registry.titles()})
+    log(`[Registry initialized]`, {
+      openTabs,
+      savedTabs,
+      pinnedTabIds,
+      registryTitles: registry.titles(),
+    })
     return registry
   }
 }
@@ -47,6 +55,15 @@ async function getSavedTabs(): Promise<ITab[]> {
 
 function saveTabs(tabs: ITab[]): void {
   chrome.storage.local.set({tabs})
+}
+
+async function getSavedPinnedTabIds(): Promise<number[]> {
+  const {pinnedTabIds} = await chrome.storage.local.get('pinnedTabIds')
+  return pinnedTabIds || []
+}
+
+function savePinnedTabIds(pinnedTabIds: number[]): void {
+  chrome.storage.local.set({pinnedTabIds})
 }
 
 async function getOpenTabs(): Promise<ITab[]> {

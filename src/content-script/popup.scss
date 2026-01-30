@@ -7,7 +7,7 @@
   --popup-opacity: 1;
 
   --popup-width: 0;
-  --popup-height: 0;
+  --popup-max-height: 0;
   --popup-border-radius: 0;
   --tab-height: 0;
   --tab-horizontal-padding: 0;
@@ -34,31 +34,61 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  font-family: 'Arial', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
+    'Open Sans', 'Helvetica Neue', sans-serif;
   opacity: var(--popup-opacity);
+  transition: opacity 0.15s ease-out;
+  // Subtle backdrop for focus
+  background: transparent;
 }
 
 .card {
   @include popup-theme-light();
 
   background: var(--card-background-color);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-radius: var(--popup-border-radius);
-  border-left: var(--popup-border-radius) solid;
-  border-left-color: var(--tab_selected-background);
-  padding-right: var(--popup-border-radius);
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.2), 0 3px 4px rgba(0, 0, 0, 0.12),
-    0 2px 4px rgba(0, 0, 0, 0.14);
+  border: 1px solid var(--card-border-color);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06),
+    0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   color: var(--card-color);
   font-size: var(--font-size);
-  height: var(--popup-height);
-  max-height: 100%;
   width: var(--popup-width);
   max-width: 100%;
+  max-height: min(var(--popup-max-height), calc(100vh - 40px));
   overflow-y: auto;
   overflow-x: hidden;
+  padding: 6px;
+
+  // Custom scrollbar
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+    border-radius: 3px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 3px;
+
+    &:hover {
+      background: var(--scrollbar-thumb);
+      opacity: 0.8;
+    }
+  }
 
   &_dark {
     @include popup-theme-dark();
+
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2),
+      0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
   }
 }
 
@@ -66,63 +96,60 @@
   display: flex;
   align-items: center;
   height: var(--tab-height);
-  padding-left: var(--tab-horizontal-padding);
+  padding-left: calc(var(--tab-horizontal-padding) / 4);
+  padding-right: var(--tab-horizontal-padding);
   position: relative;
-  border-bottom-right-radius: var(--popup-border-radius);
-  border-top-right-radius: var(--popup-border-radius);
+  border-radius: calc(var(--popup-border-radius) - 4px);
   outline: none;
   cursor: default;
   overflow: hidden;
+  transition: background-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+  margin: 2px 0;
+
+  &:first-child {
+    margin-top: 0;
+  }
+
+  &:last-child {
+    margin-bottom: 0;
+  }
 
   &:hover {
     --text-crop-gradient-color: var(--tab_hover-background);
     background-color: var(--tab_hover-background);
-    z-index: 10;
-
-    .tab__cornerIcon {
-      fill: var(--tab_hover-background);
-    }
   }
 
   &.tab_selected,
   &.tab_selected:hover {
     --text-crop-gradient-color: var(--tab_selected-background);
     background-color: var(--tab_selected-background);
-    z-index: 20;
-
-    .tab__cornerIcon {
-      fill: var(--tab_selected-background);
-    }
+    box-shadow: var(--tab_selected-shadow);
   }
 }
 
+// Remove corner icons - not needed with new rounded design
 .tab__cornerIcon {
-  position: absolute;
-  width: var(--popup-border-radius);
-  height: var(--popup-border-radius);
-  fill: var(--card-background-color);
-  left: 0;
+  display: none;
 }
 
-.tab__cornerIcon_bottom {
-  bottom: 0;
-  transform: translateY(100%) rotate(90deg);
-}
-
+.tab__cornerIcon_bottom,
 .tab__cornerIcon_top {
-  top: 0;
-  transform: translateY(-100%);
+  display: none;
 }
 
 .tab__icon {
-  height: auto;
+  height: var(--icon-size);
   width: var(--icon-size);
   // Prevents jumping of the icon after image finished loading.
   // The width property doesn't apply to the image when it is loading.
   min-width: var(--icon-size);
+  border-radius: 4px;
+  flex-shrink: 0;
+  image-rendering: -webkit-optimize-contrast; /* Fix for blurry icons */
 
   &_noFavIcon {
     fill: var(--tab__icon_noFavIcon-fill);
+    opacity: 0.7;
   }
 }
 
@@ -145,6 +172,7 @@
     height: 100%;
     background: linear-gradient(to left, transparent, var(--text-crop-gradient-color));
     z-index: var(--title-fading-zone-z-index);
+    pointer-events: none;
   }
 
   &::after {
@@ -152,9 +180,10 @@
     position: absolute;
     top: 0;
     right: 0;
-    width: var(--tab-text-padding);
+    width: calc(var(--tab-text-padding) * 2);
     height: 100%;
     background: linear-gradient(to right, transparent, var(--text-crop-gradient-color));
+    pointer-events: none;
   }
 }
 
@@ -162,15 +191,23 @@
   position: absolute;
   padding-left: var(--tab-text-padding);
   padding-right: var(--tab-text-padding);
+  transition: transform 0.1s ease-in-out;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.tab:hover .tab__textContent {
+  transform: translateX(2px);
 }
 
 .tab__timeoutIndicator {
   position: absolute;
-  width: 95%;
+  width: calc(100% - 12px);
   height: var(--tab-timeout-indicator-height);
   background: var(--tab__timeoutIndicator-background);
-  bottom: 0;
-  left: var(--popup-border-radius);
+  bottom: 4px;
+  left: 6px;
+  border-radius: 2px;
   animation-name: shrunk-indicator;
   animation-duration: var(--time-auto-switch-timeout);
   animation-timing-function: linear;
@@ -181,5 +218,57 @@
 @keyframes shrunk-indicator {
   to {
     width: 0;
+  }
+}
+
+// Pin button styles
+.tab__pinButton {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
+  flex-shrink: 0;
+  margin-left: 4px;
+  color: var(--tab__icon_noFavIcon-fill);
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.08);
+    transform: scale(1.1);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  &_pinned {
+    opacity: 1;
+    color: var(--tab__timeoutIndicator-background);
+  }
+}
+
+.tab:hover .tab__pinButton {
+  opacity: 1;
+}
+
+.tab_pinned {
+  .tab__pinButton {
+    opacity: 1;
+  }
+}
+
+.tab__pinIcon {
+  width: 14px;
+  height: 14px;
+}
+
+.card_dark {
+  .tab__pinButton:hover {
+    background-color: rgba(255, 255, 255, 0.1);
   }
 }

@@ -1,6 +1,0 @@
-{
-  "extends": "../.babelrc",
-  "sourceMaps": "inline",
-  "retainLines": true,
-  "comments": true
-}

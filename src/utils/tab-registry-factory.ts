@@ -5,7 +5,9 @@ interface ITabRegistryFactoryParams {
   openTabs: ITab[]
   savedTabs: ITab[]
   numberOfTabsToShow: number
+  pinnedTabIds?: number[]
   onTabsUpdate?: (tabs: ITab[]) => void
+  onPinnedUpdate?: (pinnedTabIds: number[]) => void
 }
 
 interface ITabWithCreationOrder extends ITab {
@@ -17,13 +19,17 @@ export class TabRegistryFactory {
     numberOfTabsToShow,
     openTabs,
     savedTabs,
+    pinnedTabIds,
     onTabsUpdate,
+    onPinnedUpdate,
   }: ITabRegistryFactoryParams): TabRegistry {
     const tabs = TabRegistryFactory.sortTabs(openTabs, savedTabs)
     return new TabRegistry({
       tabs,
       numberOfTabsToShow,
+      pinnedTabIds,
       onUpdate: onTabsUpdate,
+      onPinnedUpdate,
     })
   }
 

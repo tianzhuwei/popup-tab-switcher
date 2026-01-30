@@ -221,7 +221,12 @@ function messageHandlers(): Partial<IHandlers> {
         tabs: registry.getTabsToShow() as chrome.tabs.Tab[],
         settings,
         zoomFactor: await chrome.tabs.getZoom(),
+        pinnedTabIds: registry.getPinnedTabIds(),
       }
+    },
+    [Message.TogglePinTab]: async ({tabId}) => {
+      const registry = await ServiceFactory.getTabRegistry()
+      registry.togglePin(tabId)
     },
     [Message.SetSettings]: async ({settings}) => {
       log(`[Settings received]`, settings)

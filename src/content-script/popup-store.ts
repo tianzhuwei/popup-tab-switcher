@@ -1,6 +1,6 @@
 import {createStore, reconcile} from 'solid-js/store'
 import {defaultSettings, ISettings} from '../utils/settings'
-import {getModel, sendMessageAndGetResponse} from '../utils/messages'
+import {getModel, sendMessageAndGetResponse, togglePinTab} from '../utils/messages'
 import {log} from '../utils/logger'
 
 interface IStore {
@@ -8,7 +8,8 @@ interface IStore {
   isOpen: boolean
   settings: ISettings
   zoomFactor: number
-  selectedTabIndex: number // maybe replace it with selectedTabId?
+  selectedTabIndex: number
+  pinnedTabIds: Set<number>
 }
 
 export function createPopupStore() {
@@ -18,6 +19,7 @@ export function createPopupStore() {
     settings: defaultSettings,
     zoomFactor: 1,
     selectedTabIndex: 0,
+    pinnedTabIds: new Set(),
   })
 
   const closePopup = () => {
@@ -34,10 +36,26 @@ export function createPopupStore() {
     log(`[syncStoreWithBackground model]`, model)
     setStore({
       zoomFactor: model.zoomFactor,
+      pinnedTabIds: new Set(model.pinnedTabIds),
     })
     // This makes DOM updates efficient https://github.com/solidjs/solid/discussions/366#discussioncomment-5004420
     setStore('settings', reconcile(model.settings))
     setStore('tabs', reconcile(model.tabs))
+  }
+
+  const togglePin = async (tabId: number) => {
+    chrome.runtime.sendMessage(togglePinTab(tabId))
+    const newPinnedTabIds = new Set(store.pinnedTabIds)
+    if (newPinnedTabIds.has(tabId)) {
+      newPinnedTabIds.delete(tabId)
+    } else {
+      newPinnedTabIds.add(tabId)
+    }
+    setStore('pinnedTabIds', newPinnedTabIds)
+  }
+
+  const isPinned = (tabId: number) => {
+    return store.pinnedTabIds.has(tabId)
   }
 
   return {
@@ -46,6 +64,8 @@ export function createPopupStore() {
     openPopup,
     syncStoreWithBackground,
     selectNextTab,
+    togglePin,
+    isPinned,
   }
 
   function selectNextTab(increment: number) {

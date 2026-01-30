@@ -6,7 +6,9 @@ import {getTabsInfo} from './registry-utils'
 interface ITabRegistryOptions {
   tabs: ITab[]
   numberOfTabsToShow: number
+  pinnedTabIds: number[]
   onUpdate: (tabs: ITab[]) => void
+  onPinnedUpdate: (pinnedTabIds: number[]) => void
 }
 
 interface IInitializedTabs {
@@ -26,24 +28,53 @@ export default class TabRegistry {
 
   private numberOfTabsToShow: number
 
+  private pinnedTabIds: Set<number>
+
   private initializedTabs: IInitializedTabs
 
   private onUpdate: (tabs: ITab[]) => void
 
+  private onPinnedUpdate: (pinnedTabIds: number[]) => void
+
   constructor({
     tabs = [],
     numberOfTabsToShow = 7,
+    pinnedTabIds = [],
     onUpdate = () => {},
+    onPinnedUpdate = () => {},
   }: Partial<ITabRegistryOptions> = {}) {
     this.initializedTabs = {}
     this.tabInitializations = new Map()
     this.tabs = tabs
     this.numberOfTabsToShow = numberOfTabsToShow
+    this.pinnedTabIds = new Set(pinnedTabIds)
     this.onUpdate = onUpdate
+    this.onPinnedUpdate = onPinnedUpdate
   }
 
   setNumberOfTabsToShow(n: number) {
     this.numberOfTabsToShow = n
+  }
+
+  togglePin(tabId: number) {
+    if (this.pinnedTabIds.has(tabId)) {
+      this.pinnedTabIds.delete(tabId)
+    } else {
+      this.pinnedTabIds.add(tabId)
+    }
+    this.onPinnedUpdate(this.getPinnedTabIds())
+  }
+
+  isPinned(tabId: number): boolean {
+    return this.pinnedTabIds.has(tabId)
+  }
+
+  getPinnedTabIds(): number[] {
+    return Array.from(this.pinnedTabIds)
+  }
+
+  setPinnedTabIds(pinnedTabIds: number[]) {
+    this.pinnedTabIds = new Set(pinnedTabIds)
   }
 
   addToInitialized(tab: ITab) {
@@ -72,6 +103,10 @@ export default class TabRegistry {
   remove(tabId: number) {
     this.tabs = this.removeTab(tabId)
     this.removeFromInitialized(tabId)
+    if (this.pinnedTabIds.has(tabId)) {
+      this.pinnedTabIds.delete(tabId)
+      this.onPinnedUpdate(this.getPinnedTabIds())
+    }
     this.onUpdate(this.tabs)
   }
 
@@ -90,7 +125,19 @@ export default class TabRegistry {
   }
 
   getTabsToShow(): ITab[] {
-    return this.tabs.slice(-this.numberOfTabsToShow).reverse()
+    const recentTabs = this.tabs.slice(-this.numberOfTabsToShow).reverse()
+    const pinnedTabs: ITab[] = []
+    const unpinnedTabs: ITab[] = []
+
+    for (const tab of recentTabs) {
+      if (this.pinnedTabIds.has(tab.id)) {
+        pinnedTabs.push(tab)
+      } else {
+        unpinnedTabs.push(tab)
+      }
+    }
+
+    return [...pinnedTabs, ...unpinnedTabs]
   }
 
   getActive(): ITab | undefined {

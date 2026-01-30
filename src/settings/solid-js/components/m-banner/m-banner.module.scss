@@ -1,32 +1,38 @@
 .banner {
   background-color: var(--mdc-theme-surface);
-  box-shadow: 0px 2px 1px -1px rgba(0, 0, 0, 0.2), 0px 1px 1px 0px rgba(0, 0, 0, 0.14),
-    0px 1px 3px 0px rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
 
   display: flex;
   align-items: center;
   justify-content: space-between;
   box-sizing: border-box;
   flex-wrap: wrap;
-  padding: var(--mdc-layout-grid-margin-tablet);
-  gap: var(--mdc-layout-grid-margin-tablet);
+  padding: 16px 24px;
+  gap: 16px;
 
   position: sticky;
-  top: 0;
+  top: 16px;
   z-index: 10;
+
+  /* Ensure it looks good against the background */
+  backdrop-filter: blur(10px);
 }
 
 .content {
   display: flex;
-  gap: var(--mdc-layout-grid-margin-tablet);
+  align-items: center;
+  gap: 16px;
 }
 
 .icon {
   composes: materialIcon from global;
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  font-size: 40px;
+  width: 24px;
+  height: 24px;
+  font-size: 24px;
+  color: var(--mdc-theme-primary, #6200ee); /* Use primary color for icon */
 }
 
 .actions {
@@ -34,10 +40,14 @@
   flex-shrink: 0;
   align-items: center;
   justify-content: flex-end;
-  width: 100%;
-  gap: 6px;
+  /* width: 100%; Removed to allow it to sit next to content if space allows */
+  gap: 8px;
+  margin-left: auto; /* Push to right */
 }
 
 .message {
-  composes: mdc-typography--body2 from global;
+  composes: mdc-typography--body1 from global; /* Bump up typography slightly */
+  color: var(--mdc-theme-on-surface, #000);
+  font-weight: 500;
+  opacity: 0.9;
 }

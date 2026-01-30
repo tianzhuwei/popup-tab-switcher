@@ -1,4 +1,32 @@
-// colors
+// colors - Modern Chrome-style palette
+$color-white: #ffffff;
+$color-gray-50: #f8fafc;
+$color-gray-100: #f1f5f9;
+$color-gray-200: #e2e8f0;
+$color-gray-300: #cbd5e1;
+$color-gray-400: #94a3b8;
+$color-gray-500: #64748b;
+$color-gray-600: #475569;
+$color-gray-700: #334155;
+$color-gray-800: #1e293b;
+$color-gray-900: #0f172a;
+
+// Dark theme colors
+$color-dark-bg: #1a1a1a;
+$color-dark-surface: #242424;
+$color-dark-surface-hover: #2e2e2e;
+$color-dark-surface-active: #383838;
+$color-dark-border: #3a3a3a;
+$color-dark-text: #e4e4e7;
+$color-dark-text-secondary: #a1a1aa;
+
+// Accent colors - Chrome blue
+$color-blue-primary: #1a73e8;
+$color-blue-light: #4285f4;
+$color-blue-lighter: #8ab4f8;
+$color-blue-dark: #1557b0;
+
+// Legacy color mappings (for backward compatibility)
 $color-gray-athens: #e4e7ea;
 $color-gray-athens-light: #f1f2f5;
 $color-gray-abbey: #4d5055;
@@ -8,25 +36,33 @@ $color-gray-porcelain: #e9ebec;
 $color-gray-shark: #252629;
 $color-gray-shark-light: #2e3133;
 $color-blue-dodger: #448aff;
-$color-blue-mariner: #366ad3;
-$color-blue-mariner-light: #2274e1;
+$color-blue-mariner: #1a73e8;
+$color-blue-mariner-light: #4285f4;
 
-// light theme
+// light theme - Modern glassmorphism style
 @mixin popup-theme-light() {
-  --card-color: black;
-  --card-background-color: #{$color-gray-athens};
-  --tab_selected-background: white;
-  --tab_hover-background: #{$color-gray-athens-light};
-  --tab__timeoutIndicator-background: #{$color-blue-dodger};
-  --tab__icon_noFavIcon-fill: #{$color-gray-abbey};
+  --card-color: #{$color-gray-800};
+  --card-background-color: rgba(255, 255, 255, 0.92);
+  --card-border-color: rgba(0, 0, 0, 0.08);
+  --tab_selected-background: #{$color-white};
+  --tab_selected-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --tab_hover-background: #{$color-gray-50};
+  --tab__timeoutIndicator-background: #{$color-blue-primary};
+  --tab__icon_noFavIcon-fill: #{$color-gray-500};
+  --scrollbar-thumb: #{$color-gray-300};
+  --scrollbar-track: transparent;
 }
 
-// dark theme
+// dark theme - Modern dark mode
 @mixin popup-theme-dark() {
-  --card-color: #{$color-gray-porcelain};
-  --card-background-color: #{$color-gray-shark};
-  --tab_selected-background: #{$color-gray-outer-space};
-  --tab_hover-background: #{$color-gray-shark-light};
-  --tab__timeoutIndicator-background: #{$color-blue-dodger};
-  --tab__icon_noFavIcon-fill: white;
+  --card-color: #{$color-dark-text};
+  --card-background-color: rgba(26, 26, 26, 0.95);
+  --card-border-color: #{$color-dark-border};
+  --tab_selected-background: #{$color-dark-surface-active};
+  --tab_selected-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --tab_hover-background: #{$color-dark-surface-hover};
+  --tab__timeoutIndicator-background: #{$color-blue-lighter};
+  --tab__icon_noFavIcon-fill: #{$color-dark-text-secondary};
+  --scrollbar-thumb: #{$color-gray-600};
+  --scrollbar-track: transparent;
 }
