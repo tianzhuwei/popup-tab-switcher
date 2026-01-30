@@ -53,5 +53,9 @@ npm run build:dev
 
 ## 致谢
 
+本项目基于 [dvdvdmt](https://github.com/dvdvdmt) 的 [popup-tab-switcher](https://github.com/dvdvdmt/popup-tab-switcher) 进行二次开发。
+
+感谢原作者创建了如此优秀的标签切换工具，为本项目奠定了坚实的基础。
+
 - 原作者: [dvdvdmt](https://github.com/dvdvdmt)
 - 图标设计: [Alina Zaripova](https://www.behance.net/alicilinia)
