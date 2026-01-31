@@ -1,37 +1,47 @@
-import {Show} from 'solid-js/web'
-import {createEffect} from 'solid-js'
-import {TabIcon, PinIcon} from './icons'
+import { Show } from "solid-js/web";
+import { createEffect } from "solid-js";
+import { TabIcon, PinIcon, CloseIcon } from "./icons";
 
 interface IProps {
-  isSelected: boolean
-  isTimeoutShown: boolean
-  isLast: boolean
-  isFirst: boolean
-  isPinned: boolean
-  tab: chrome.tabs.Tab
-  onClick: () => void
-  onTogglePin: () => void
-  textScrollSpeed: number
-  textScrollDelay: number
+  isSelected: boolean;
+  isTimeoutShown: boolean;
+  isLast: boolean;
+  isFirst: boolean;
+  isPinned: boolean;
+  tab: chrome.tabs.Tab;
+  onClick: () => void;
+  onHover: () => void;
+  onTogglePin: () => void;
+  onClose: () => void;
+  textScrollSpeed: number;
+  textScrollDelay: number;
 }
 
 export function PopupTab(props: IProps) {
-  let tabElement: HTMLDivElement
-  let tabTextElement: HTMLDivElement
-  let tabTextContentElement: HTMLElement
+  let tabElement: HTMLDivElement;
+  let tabTextElement: HTMLDivElement;
+  let tabTextContentElement: HTMLElement;
 
   createEffect(() => {
     if (props.isSelected) {
-      scrollLongTextOfSelectedTab()
-      tabElement.focus()
+      scrollLongTextOfSelectedTab();
+      tabElement.focus();
     } else {
-      tabTextContentElement.getAnimations().forEach((animation) => animation.cancel())
+      tabTextContentElement
+        .getAnimations()
+        .forEach((animation) => animation.cancel());
     }
-  })
+  });
 
   function handlePinClick(e: MouseEvent) {
-    e.stopPropagation()
-    props.onTogglePin()
+    e.stopPropagation();
+    props.onTogglePin();
+  }
+
+  function handleCloseClick(e: MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    props.onClose();
   }
 
   return (
@@ -39,15 +49,24 @@ export function PopupTab(props: IProps) {
       ref={tabElement!}
       tabindex="-1"
       class="tab"
+      data-tab-id={props.tab.id}
       classList={{
         tab_selected: props.isSelected,
         tab_pinned: props.isPinned,
       }}
       onClick={props.onClick}
+      onMouseEnter={props.onHover}
     >
       <Show when={props.isTimeoutShown}>
         <div class="tab__timeoutIndicator" />
       </Show>
+      <button
+        class="tab__closeButton"
+        onClick={handleCloseClick}
+        title="Close tab"
+      >
+        <CloseIcon />
+      </button>
       <TabIcon url={props.tab.url} />
       <div ref={tabTextElement!} class="tab__text">
         <span class="tab__textContent" ref={tabTextContentElement!}>
@@ -60,32 +79,35 @@ export function PopupTab(props: IProps) {
           tab__pinButton_pinned: props.isPinned,
         }}
         onClick={handlePinClick}
-        title={props.isPinned ? 'Unpin tab' : 'Pin tab'}
+        title={props.isPinned ? "Unpin tab" : "Pin tab"}
       >
         <PinIcon isPinned={props.isPinned} />
       </button>
     </div>
-  )
+  );
 
   function scrollLongTextOfSelectedTab() {
-    const horizontalPadding = 10
-    const fullTextWidthWithoutOnePadding = tabTextContentElement.scrollWidth - horizontalPadding
-    const textOverflow = fullTextWidthWithoutOnePadding - tabTextElement.clientWidth
-    const pixelsPerSecond = 90 * props.textScrollSpeed
+    const horizontalPadding = 10;
+    const fullTextWidthWithoutOnePadding =
+      tabTextContentElement.scrollWidth - horizontalPadding;
+    const textOverflow =
+      fullTextWidthWithoutOnePadding - tabTextElement.clientWidth;
+    const pixelsPerSecond = 90 * props.textScrollSpeed;
     if (textOverflow > 0) {
-      const hiddenTextWidthWithPadding = textOverflow + horizontalPadding
-      const scrollTimeMs = (hiddenTextWidthWithPadding / pixelsPerSecond) * 1000
-      const durationMs = scrollTimeMs + 2 * props.textScrollDelay
-      const startDelayOffset = props.textScrollDelay / durationMs
-      const endDelayOffset = 1 - startDelayOffset
+      const hiddenTextWidthWithPadding = textOverflow + horizontalPadding;
+      const scrollTimeMs =
+        (hiddenTextWidthWithPadding / pixelsPerSecond) * 1000;
+      const durationMs = scrollTimeMs + 2 * props.textScrollDelay;
+      const startDelayOffset = props.textScrollDelay / durationMs;
+      const endDelayOffset = 1 - startDelayOffset;
       tabTextContentElement.animate(
         [
           {
-            transform: 'initial',
+            transform: "initial",
             offset: 0,
           },
           {
-            transform: 'initial',
+            transform: "initial",
             offset: startDelayOffset,
           },
           {
@@ -99,10 +121,10 @@ export function PopupTab(props: IProps) {
         ],
         {
           duration: durationMs,
-          direction: 'normal',
+          direction: "normal",
           iterations: Infinity,
         }
-      )
+      );
     }
   }
 }

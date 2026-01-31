@@ -1,81 +1,136 @@
-import {For, render, Show} from 'solid-js/web'
-import {createEffect, onCleanup, onMount} from 'solid-js'
-import styles from './popup.scss'
+import { For, render, Show } from "solid-js/web";
+import { createEffect, onCleanup, onMount } from "solid-js";
+import styles from "./popup.scss";
 import {
   contentScriptStarted,
   contentScriptStopped,
   handleMessage,
   Message,
   switchTab,
-} from '../utils/messages'
-import {log} from '../utils/logger'
-import {createPopupStore} from './popup-store'
-import {PopupTab} from './popup-tab'
-import uuid from '../utils/uuid'
-import {SelectionAndFocus} from './selection-and-focus'
-import {PopupTestHelper} from './popup-test-helper'
+} from "../utils/messages";
+import { log } from "../utils/logger";
+import { createPopupStore } from "./popup-store";
+import { PopupTab } from "./popup-tab";
+import uuid from "../utils/uuid";
+import { SelectionAndFocus } from "./selection-and-focus";
+import { PopupTestHelper } from "./popup-test-helper";
 
-type ITab = chrome.tabs.Tab
+type ITab = chrome.tabs.Tab;
 
 interface IProps {
-  element: HTMLElement
+  element: HTMLElement;
 }
 
-let testHelper: undefined | PopupTestHelper
+let testHelper: undefined | PopupTestHelper;
 if (E2E) {
-  testHelper = new PopupTestHelper()
+  testHelper = new PopupTestHelper();
 }
 
-export function Popup({element}: IProps) {
+export function Popup({ element }: IProps) {
   const {
     store,
     syncStoreWithBackground,
     openPopup,
     closePopup,
     selectNextTab,
+    selectTabIndex,
     togglePin,
     isPinned,
-  } = createPopupStore()
+    removeTab,
+  } = createPopupStore();
   // Prevents auto switching when the popup is opened.
-  let isSettingsDemo = false
+  let isSettingsDemo = false;
   // Stores the last active element before the popup was opened.
-  const selectionAndFocus = new SelectionAndFocus()
-  let cleanUpListeners = () => {}
-  let disposeAutoSwitchingTimeout: () => void = () => {}
+  const selectionAndFocus = new SelectionAndFocus();
+  let cleanUpListeners = () => {};
+  let disposeAutoSwitchingTimeout: () => void = () => {};
 
   // Mouse hover state tracking
-  let isMouseOverCard = false
-  let mouseIdleTimeout: number | undefined
-  const MOUSE_IDLE_DURATION = 3000
-  let suppressAutoCloseUntil = 0
+  let isMouseOverCard = false;
+  let mouseIdleTimeout: number | undefined;
+  const MOUSE_IDLE_DURATION = 3000;
+  let suppressAutoCloseUntil = 0;
+  let prevTabRects: Map<number, DOMRect> | null = null;
+
+  function snapshotTabPositions() {
+    const tabElements = element.shadowRoot?.querySelectorAll(".tab");
+    const nextMap = new Map<number, DOMRect>();
+    tabElements?.forEach((el) => {
+      const id = Number((el as HTMLElement).dataset.tabId);
+      if (Number.isFinite(id)) {
+        nextMap.set(id, el.getBoundingClientRect());
+      }
+    });
+    prevTabRects = nextMap;
+  }
 
   onMount(() => {
-    log(`[start switcher]`)
-    cleanUpListeners = setUpListeners()
-    chrome.runtime.sendMessage(contentScriptStarted())
-  })
+    log(`[start switcher]`);
+    cleanUpListeners = setUpListeners();
+    chrome.runtime.sendMessage(contentScriptStarted());
+  });
 
   onCleanup(() => {
-    log(`[stop switcher]`)
-    cleanUpListeners()
-    disposeAutoSwitchingTimeout()
-    clearMouseIdleTimeout()
-    chrome.runtime.sendMessage(contentScriptStopped())
-  })
+    log(`[stop switcher]`);
+    cleanUpListeners();
+    disposeAutoSwitchingTimeout();
+    clearMouseIdleTimeout();
+    chrome.runtime.sendMessage(contentScriptStopped());
+  });
 
   createEffect(() => {
-    log(`[render switcher]`)
-    if (store.isOpen) {
-      selectionAndFocus.saveState()
-      showOverlay()
-      testHelper?.popupShown()
-    } else {
-      element.style.display = 'none'
-      selectionAndFocus.apply()
-      isMouseOverCard = false
-      clearMouseIdleTimeout()
+    store.tabs;
+    if (!prevTabRects) {
+      return;
     }
-  })
+    const cardElement = element.shadowRoot?.querySelector(".card");
+    if (!cardElement) {
+      prevTabRects = null;
+      return;
+    }
+    const tabs = Array.from(cardElement.querySelectorAll<HTMLElement>(".tab"));
+    tabs.forEach((tabEl) => {
+      const idAttr = tabEl.dataset.tabId;
+      if (!idAttr) {
+        return;
+      }
+      const tabId = Number(idAttr);
+      const prevRect = prevTabRects?.get(tabId);
+      if (!prevRect) {
+        return;
+      }
+      const newRect = tabEl.getBoundingClientRect();
+      const deltaY = prevRect.top - newRect.top;
+      if (deltaY === 0) {
+        return;
+      }
+      tabEl.animate(
+        [
+          { transform: `translateY(${deltaY}px)` },
+          { transform: "translateY(0)" },
+        ],
+        {
+          duration: 250,
+          easing: "ease-out",
+        }
+      );
+    });
+    prevTabRects = null;
+  });
+
+  createEffect(() => {
+    log(`[render switcher]`);
+    if (store.isOpen) {
+      selectionAndFocus.saveState();
+      showOverlay();
+      testHelper?.popupShown();
+    } else {
+      element.style.display = "none";
+      selectionAndFocus.apply();
+      isMouseOverCard = false;
+      clearMouseIdleTimeout();
+    }
+  });
 
   return (
     <>
@@ -84,7 +139,7 @@ export function Popup({element}: IProps) {
         <div class="overlay">
           <div
             class="card"
-            classList={{card_dark: store.settings.isDarkTheme}}
+            classList={{ card_dark: store.settings.isDarkTheme }}
             data-test="card"
             onMouseEnter={onMouseEnterCard}
             onMouseLeave={onMouseLeaveCard}
@@ -97,11 +152,24 @@ export function Popup({element}: IProps) {
                   isFirst={index() === 0}
                   isLast={index() === store.tabs.length - 1}
                   isSelected={index() === store.selectedTabIndex}
-                  isTimeoutShown={index() === store.selectedTabIndex && !document.hasFocus()}
+                  isTimeoutShown={
+                    index() === store.selectedTabIndex && !document.hasFocus()
+                  }
                   isPinned={isPinned(tab.id!)}
-                  onTogglePin={() => togglePin(tab.id!)}
+                  onTogglePin={() => {
+                    suppressAutoClose();
+                    snapshotTabPositions();
+                    togglePin(tab.id!);
+                  }}
+                  onHover={() => selectTabIndex(index())}
+                  onClose={() => {
+                    if (tab.id !== undefined) {
+                      suppressAutoClose();
+                      removeTab(tab.id);
+                    }
+                  }}
                   onClick={() => {
-                    switchTo(tab)
+                    switchTo(tab);
                   }}
                   textScrollSpeed={store.settings.textScrollSpeed}
                   textScrollDelay={store.settings.textScrollDelay}
@@ -112,7 +180,7 @@ export function Popup({element}: IProps) {
         </div>
       </Show>
     </>
-  )
+  );
 
   // NOTE:
   //  Placing functions after the return statement divides the code in two distinct parts:
@@ -136,213 +204,242 @@ export function Popup({element}: IProps) {
      Restrictions:
      - The minimal font size on large zoom levels can't be rewritten.
     */
-    const {fontSize, numberOfTabsToShow, tabHeight, popupWidth, iconSize} = store.settings
-    const zoomFactor = store.zoomFactor
+    const { fontSize, numberOfTabsToShow, tabHeight, popupWidth, iconSize } =
+      store.settings;
+    const zoomFactor = store.zoomFactor;
     // Dynamic height: adapts to actual tab count, but capped at numberOfTabsToShow
-    const actualTabCount = store.tabs.length
-    const displayTabCount = Math.min(actualTabCount, numberOfTabsToShow)
+    const actualTabCount = store.tabs.length;
+    const displayTabCount = Math.min(actualTabCount, numberOfTabsToShow);
     // Calculate max height for scrolling when tabs exceed the limit
-    const maxPopupHeight = numberOfTabsToShow * tabHeight + 12 // 12px for padding (6px top + 6px bottom)
-    const popupBorderRadius = 12
-    const tabHorizontalPadding = 12
-    const tabTextPadding = 12
-    const tabTimeoutIndicatorHeight = 3
+    const maxPopupHeight = numberOfTabsToShow * tabHeight + 12; // 12px for padding (6px top + 6px bottom)
+    const popupBorderRadius = 12;
+    const tabHorizontalPadding = 12;
+    const tabTextPadding = 12;
+    const tabTimeoutIndicatorHeight = 3;
 
-    element.style.setProperty('--popup-width', `${popupWidth / zoomFactor}px`)
-    element.style.setProperty('--popup-max-height', `${maxPopupHeight / zoomFactor}px`)
-    element.style.setProperty('--popup-border-radius', `${popupBorderRadius / zoomFactor}px`)
-    element.style.setProperty('--tab-height', `${tabHeight / zoomFactor}px`)
-    element.style.setProperty('--tab-horizontal-padding', `${tabHorizontalPadding / zoomFactor}px`)
-    element.style.setProperty('--tab-text-padding', `${tabTextPadding / zoomFactor}px`)
+    element.style.setProperty("--popup-width", `${popupWidth / zoomFactor}px`);
     element.style.setProperty(
-      '--tab-timeout-indicator-height',
+      "--popup-max-height",
+      `${maxPopupHeight / zoomFactor}px`
+    );
+    element.style.setProperty(
+      "--popup-border-radius",
+      `${popupBorderRadius / zoomFactor}px`
+    );
+    element.style.setProperty("--tab-height", `${tabHeight / zoomFactor}px`);
+    element.style.setProperty(
+      "--tab-horizontal-padding",
+      `${tabHorizontalPadding / zoomFactor}px`
+    );
+    element.style.setProperty(
+      "--tab-text-padding",
+      `${tabTextPadding / zoomFactor}px`
+    );
+    element.style.setProperty(
+      "--tab-timeout-indicator-height",
       `${tabTimeoutIndicatorHeight / zoomFactor}px`
-    )
-    element.style.setProperty('--font-size', `${fontSize / zoomFactor}px`)
-    element.style.setProperty('--icon-size', `${iconSize / zoomFactor}px`)
+    );
+    element.style.setProperty("--font-size", `${fontSize / zoomFactor}px`);
+    element.style.setProperty("--icon-size", `${iconSize / zoomFactor}px`);
   }
 
   function showOverlay() {
-    element.style.display = 'block'
-    element.style.setProperty('--popup-opacity', `${store.settings.opacity / 100}`)
+    element.style.display = "block";
     element.style.setProperty(
-      '--time-auto-switch-timeout',
+      "--popup-opacity",
+      `${store.settings.opacity / 100}`
+    );
+    element.style.setProperty(
+      "--time-auto-switch-timeout",
       `${store.settings.autoSwitchingTimeout}ms`
-    )
-    setStylePropertiesThatDependOnPageZoom()
+    );
+    setStylePropertiesThatDependOnPageZoom();
   }
 
   async function onWindowResize() {
     if (store.isOpen) {
-      await syncStoreWithBackground()
-      setStylePropertiesThatDependOnPageZoom()
+      await syncStoreWithBackground();
+      setStylePropertiesThatDependOnPageZoom();
     }
   }
 
   function switchTo(selectedTab: ITab) {
-    chrome.runtime.sendMessage(switchTab(selectedTab))
-    closePopup()
+    chrome.runtime.sendMessage(switchTab(selectedTab));
+    closePopup();
   }
 
   function setUpListeners() {
-    const cardElement = element.shadowRoot?.querySelector('.card')
+    const cardElement = element.shadowRoot?.querySelector(".card");
 
-    element.addEventListener('click', onOverlayClick, {capture: true})
-    window.addEventListener('keyup', onKeyUp, {capture: true})
-    window.addEventListener('keydown', onKeyDown, {capture: true})
-    window.addEventListener('blur', onWindowBlur, {capture: true})
-    window.addEventListener('resize', onWindowResize, {capture: true})
+    element.addEventListener("click", onOverlayClick, { capture: true });
+    window.addEventListener("keyup", onKeyUp, { capture: true });
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    window.addEventListener("blur", onWindowBlur, { capture: true });
+    window.addEventListener("resize", onWindowResize, { capture: true });
 
     if (cardElement) {
-      cardElement.addEventListener('mouseenter', onMouseEnterCard)
-      cardElement.addEventListener('mouseleave', onMouseLeaveCard)
-      cardElement.addEventListener('mousemove', onMouseMoveOnCard)
+      cardElement.addEventListener("mouseenter", onMouseEnterCard);
+      cardElement.addEventListener("mouseleave", onMouseLeaveCard);
+      cardElement.addEventListener("mousemove", onMouseMoveOnCard);
     }
 
     const messageListener = handleMessage({
       [Message.DEMO_SETTINGS]: async () => {
-        isSettingsDemo = true
-        await syncStoreWithBackground()
-        openPopup()
+        isSettingsDemo = true;
+        await syncStoreWithBackground();
+        openPopup();
       },
       [Message.CLOSE_POPUP]: closePopup,
-      [Message.SELECT_TAB]: async ({increment}) => {
-        await syncStoreWithBackground()
-        openPopup()
-        selectNextTab(increment)
+      [Message.SELECT_TAB]: async ({ increment }) => {
+        await syncStoreWithBackground();
+        openPopup();
+        selectNextTab(increment);
         // When the focus is on the address bar or the 'search in the page' field
         // then the extension should switch a tab at the end of a timer.
         // Because there is no way to handle key pressings when a page has no focus.
         // https://stackoverflow.com/a/20940788/3167855
         if (!document.hasFocus()) {
-          disposeAutoSwitchingTimeout()
+          disposeAutoSwitchingTimeout();
 
           const timeout = window.setTimeout(() => {
-            switchTo(store.tabs[store.selectedTabIndex])
-          }, store.settings.autoSwitchingTimeout)
+            switchTo(store.tabs[store.selectedTabIndex]);
+          }, store.settings.autoSwitchingTimeout);
 
           disposeAutoSwitchingTimeout = () => {
-            window.clearTimeout(timeout)
-          }
+            window.clearTimeout(timeout);
+          };
         }
       },
-    })
-    chrome.runtime.onMessage.addListener(messageListener)
+    });
+    chrome.runtime.onMessage.addListener(messageListener);
 
-    const disposeFixUnfocusedDocumentInPdfFiles = fixUnfocusedDocumentInPdfFiles()
+    const disposeFixUnfocusedDocumentInPdfFiles =
+      fixUnfocusedDocumentInPdfFiles();
 
     return () => {
-      element.removeEventListener('click', onOverlayClick)
-      window.removeEventListener('keyup', onKeyUp)
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('blur', onWindowBlur)
-      window.removeEventListener('resize', onWindowResize)
+      element.removeEventListener("click", onOverlayClick);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("blur", onWindowBlur);
+      window.removeEventListener("resize", onWindowResize);
       if (cardElement) {
-        cardElement.removeEventListener('mouseenter', onMouseEnterCard)
-        cardElement.removeEventListener('mouseleave', onMouseLeaveCard)
-        cardElement.removeEventListener('mousemove', onMouseMoveOnCard)
+        cardElement.removeEventListener("mouseenter", onMouseEnterCard);
+        cardElement.removeEventListener("mouseleave", onMouseLeaveCard);
+        cardElement.removeEventListener("mousemove", onMouseMoveOnCard);
       }
-      chrome.runtime.onMessage.removeListener(messageListener)
-      disposeFixUnfocusedDocumentInPdfFiles()
-    }
+      chrome.runtime.onMessage.removeListener(messageListener);
+      disposeFixUnfocusedDocumentInPdfFiles();
+    };
   }
 
   function onOverlayClick(event: MouseEvent) {
+    const cardElement = element.shadowRoot?.querySelector(".card");
+    if (cardElement && event.composedPath().includes(cardElement)) {
+      return;
+    }
     if (event.target === element) {
-      closePopup()
+      closePopup();
     }
   }
 
   function onKeyDown(event: KeyboardEvent) {
-    log(`[onKeyDown event]`, event)
+    log(`[onKeyDown event]`, event);
     if (!store.isOpen) {
-      return
+      return;
     }
-    const handlers: {[key: string]: () => void} = {
+    const handlers: { [key: string]: () => void } = {
       Escape: () => closePopup(),
-      Enter: () => switchTo(store.tabs[store.selectedTabIndex]),
+      Enter: () => {
+        const selectedTab = store.tabs[store.selectedTabIndex];
+        if (selectedTab) {
+          switchTo(selectedTab);
+        }
+      },
       ArrowUp: () => selectNextTab(-1),
       ArrowDown: () => selectNextTab(1),
       Tab: () => selectNextTab(event.shiftKey ? -1 : 1),
-    }
-    const handler = handlers[event.key]
+    };
+    const handler = handlers[event.key];
     if (handler) {
-      handler()
-      event.preventDefault()
-      event.stopPropagation()
+      handler();
+      event.preventDefault();
+      event.stopPropagation();
     }
   }
 
   function onKeyUp(event: KeyboardEvent): void {
-    log(`[onKeyUp event]`, event)
+    log(`[onKeyUp event]`, event);
     if (!store.isOpen || store.settings.isStayingOpen) {
-      return
+      return;
     }
     if (Date.now() < suppressAutoCloseUntil) {
-      return
+      return;
     }
-    if (['Alt', 'Control', 'Meta'].includes(event.key)) {
+    if (["Alt", "Control", "Meta"].includes(event.key)) {
       if (!isMouseOverCard) {
-        switchTo(store.tabs[store.selectedTabIndex])
+        const selectedTab = store.tabs[store.selectedTabIndex];
+        if (selectedTab) {
+          switchTo(selectedTab);
+        }
       }
-      event.preventDefault()
-      event.stopPropagation()
+      event.preventDefault();
+      event.stopPropagation();
     }
   }
 
   function onWindowBlur(event: Event): void {
     if (event.target !== window || isSettingsDemo) {
-      return
+      return;
     }
     if (Date.now() < suppressAutoCloseUntil) {
-      return
+      return;
     }
     if (!isMouseOverCard) {
-      closePopup()
+      closePopup();
     }
   }
 
   function onMouseEnterCard() {
-    isMouseOverCard = true
-    resetMouseIdleTimeout()
+    isMouseOverCard = true;
+    resetMouseIdleTimeout();
   }
 
   function onMouseLeaveCard() {
     if (Date.now() < suppressAutoCloseUntil) {
       // Keep mouse state active during suppression to prevent premature closing
-      isMouseOverCard = true
-      resetMouseIdleTimeout()
-      return
+      isMouseOverCard = true;
+      resetMouseIdleTimeout();
+      return;
     }
-    isMouseOverCard = false
-    clearMouseIdleTimeout()
+    isMouseOverCard = false;
+    clearMouseIdleTimeout();
     if (store.isOpen && !store.settings.isStayingOpen) {
-      closePopup()
+      closePopup();
     }
   }
 
   function onMouseMoveOnCard() {
-    resetMouseIdleTimeout()
+    resetMouseIdleTimeout();
   }
 
   function resetMouseIdleTimeout() {
-    clearMouseIdleTimeout()
+    clearMouseIdleTimeout();
     mouseIdleTimeout = window.setTimeout(() => {
       if (isMouseOverCard && store.isOpen && !store.settings.isStayingOpen) {
-        closePopup()
+        closePopup();
       }
-    }, MOUSE_IDLE_DURATION)
+    }, MOUSE_IDLE_DURATION);
   }
 
   function clearMouseIdleTimeout() {
     if (mouseIdleTimeout !== undefined) {
-      window.clearTimeout(mouseIdleTimeout)
-      mouseIdleTimeout = undefined
+      window.clearTimeout(mouseIdleTimeout);
+      mouseIdleTimeout = undefined;
     }
   }
 
   function suppressAutoClose(duration = 3000) {
-    suppressAutoCloseUntil = Date.now() + duration
+    suppressAutoCloseUntil = Date.now() + duration;
   }
 
   /**
@@ -353,58 +450,60 @@ export function Popup({element}: IProps) {
    * https://stackoverflow.com/questions/58702747/window-events-with-pdf-document-via-chrome/75570258#75570258
    */
   function fixUnfocusedDocumentInPdfFiles(): () => void {
-    if (document.contentType !== 'application/pdf') {
-      return () => {}
+    if (document.contentType !== "application/pdf") {
+      return () => {};
     }
-    const pdfElement = document.querySelector<HTMLEmbedElement>('embed[type="application/pdf"]')
-    restoreFocus()
-    pdfElement?.addEventListener('blur', restoreFocus)
+    const pdfElement = document.querySelector<HTMLEmbedElement>(
+      'embed[type="application/pdf"]'
+    );
+    restoreFocus();
+    pdfElement?.addEventListener("blur", restoreFocus);
 
     return () => {
-      pdfElement?.removeEventListener('blur', restoreFocus)
-    }
+      pdfElement?.removeEventListener("blur", restoreFocus);
+    };
 
     function restoreFocus() {
-      pdfElement?.focus()
+      pdfElement?.focus();
     }
   }
 }
 
 export class PopupTabSwitcherElement extends HTMLElement {
-  shadowRoot: ShadowRoot
+  shadowRoot: ShadowRoot;
 
   /**
    * Removes the SolidJS element from the DOM.
    */
-  private disposeRoot: () => void
+  private disposeRoot: () => void;
 
   /**
    * Stops listening to the disconnection of the element from the DOM.
    */
-  private disposeDisconnectionListener: () => void
+  private disposeDisconnectionListener: () => void;
 
   constructor() {
-    super()
-    this.attachShadow({mode: 'open'})
+    super();
+    this.attachShadow({ mode: "open" });
   }
 
   /**
    * Fires when the custom element is disconnected from the DOM.
    */
   disconnectedCallback() {
-    log('[disconnectedCallback]')
-    this.disposeDisconnectionListener()
-    this.disposeRoot()
+    log("[disconnectedCallback]");
+    this.disposeDisconnectionListener();
+    this.disposeRoot();
   }
 
   /**
    * Fires when the custom element is connected to the DOM.
    */
   connectedCallback() {
-    this.disposeDisconnectionListener = this.initDisconnectionListener()
+    this.disposeDisconnectionListener = this.initDisconnectionListener();
     // We can't render instantly in the constructor because the custom element
     // should not have properties before it is created.
-    this.disposeRoot = render(() => <Popup element={this} />, this.shadowRoot)
+    this.disposeRoot = render(() => <Popup element={this} />, this.shadowRoot);
   }
 
   /**
@@ -417,35 +516,35 @@ export class PopupTabSwitcherElement extends HTMLElement {
    */
   initDisconnectionListener(): () => void {
     const observer = new MutationObserver((records) => {
-      log(`[mutation records]`, records)
+      log(`[mutation records]`, records);
       if (!this.parentNode) {
-        this.disconnectedCallback()
+        this.disconnectedCallback();
       }
-    })
+    });
 
     observer.observe(document.body, {
       childList: true,
-    })
+    });
 
     return () => {
-      observer.disconnect()
-    }
+      observer.disconnect();
+    };
   }
 }
 
 export function initPopupTabSwitcher(): void {
-  const id = 'popup-tab-switcher'
-  const existingEl = document.getElementById(id)
+  const id = "popup-tab-switcher";
+  const existingEl = document.getElementById(id);
   if (existingEl) {
-    existingEl.remove()
+    existingEl.remove();
   }
   // NOTE:
   // Registered custom element can't use the same name in a subsequent registration
   // using define() method. That is why we need to generate a new name by mixing
   // a random number to it.
-  const name = `${id}-${uuid()}`
-  customElements.define(name, PopupTabSwitcherElement)
-  const tabSwitcherElement = document.createElement(name)
-  tabSwitcherElement.id = id
-  document.body.append(tabSwitcherElement)
+  const name = `${id}-${uuid()}`;
+  customElements.define(name, PopupTabSwitcherElement);
+  const tabSwitcherElement = document.createElement(name);
+  tabSwitcherElement.id = id;
+  document.body.append(tabSwitcherElement);
 }
