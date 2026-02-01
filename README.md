@@ -4,7 +4,7 @@
 > **原作者**: [dvdvdmt](https://github.com/dvdvdmt)  
 > **Chrome 商店**: [Popup Tab Switcher](https://chrome.google.com/webstore/detail/popup-tab-switcher/cehdjppppegalmaffcdffkkpmoflfhkc)
 
-![Popup tab switcher logo](./readme-assets/tab-switcher-logo.png)
+![Popup tab switcher logo](./readme-assets/icon.png)
 
 ## 简介
 
