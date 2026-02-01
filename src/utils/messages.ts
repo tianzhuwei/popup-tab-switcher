@@ -139,6 +139,8 @@ export interface IGetModelResponse {
   tabs: chrome.tabs.Tab[];
   zoomFactor: number;
   pinnedTabIds: number[];
+  activeTabId: number | undefined;
+  previousTabId: number | undefined;
 }
 
 export type IMessageResponse<Message extends IMessage> =

@@ -234,11 +234,15 @@ function messageHandlers(): Partial<IHandlers> {
     [Message.GET_MODEL]: async () => {
       const settings = await ServiceFactory.getSettings();
       const registry = await ServiceFactory.getTabRegistry();
+      const activeTab = registry.getActive();
+      const previousTab = registry.getPreviouslyActive();
       return {
         tabs: registry.getTabsToShow() as chrome.tabs.Tab[],
         settings,
         zoomFactor: await chrome.tabs.getZoom(),
         pinnedTabIds: registry.getPinnedTabIds(),
+        activeTabId: activeTab?.id,
+        previousTabId: previousTab?.id,
       };
     },
     [Message.TogglePinTab]: async ({ tabId }) => {

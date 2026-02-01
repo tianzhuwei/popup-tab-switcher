@@ -45,6 +45,20 @@ export function createPopupStore() {
     });
     setStore("settings", reconcile(model.settings));
     setStore("tabs", reconcile(model.tabs));
+
+    let targetIndex = 0;
+    if (
+      model.settings.isSwitchingToPreviouslyUsedTab &&
+      model.activeTabId !== undefined
+    ) {
+      const foundIndex = model.tabs.findIndex(
+        (tab) => tab.id === model.activeTabId
+      );
+      if (foundIndex !== -1) {
+        targetIndex = foundIndex;
+      }
+    }
+    setStore("selectedTabIndex", targetIndex);
   };
 
   const togglePin = async (tabId: number) => {
