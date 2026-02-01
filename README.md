@@ -1,8 +1,7 @@
 # Popup Tab Switcher
 
 > **原项目来源**: [dvdvdmt/popup-tab-switcher](https://github.com/dvdvdmt/popup-tab-switcher)  
-> **原作者**: [dvdvdmt](https://github.com/dvdvdmt)  
-> **Chrome 商店**: [Popup Tab Switcher](https://chrome.google.com/webstore/detail/popup-tab-switcher/cehdjppppegalmaffcdffkkpmoflfhkc)
+> **原作者**: [dvdvdmt](https://github.com/dvdvdmt)
 
 ![Popup tab switcher logo](./readme-assets/icon.png)
 
