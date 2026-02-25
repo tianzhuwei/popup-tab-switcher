@@ -161,7 +161,11 @@ export function Popup({ element }: IProps) {
                     snapshotTabPositions();
                     togglePin(tab.id!);
                   }}
-                  onHover={() => selectTabIndex(index())}
+                  onHover={() => {
+                    if (store.settings.isHoverSelectingTab) {
+                      selectTabIndex(index());
+                    }
+                  }}
                   onClose={() => {
                     if (tab.id !== undefined) {
                       suppressAutoClose();

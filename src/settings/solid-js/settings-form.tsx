@@ -1,43 +1,52 @@
-import {Show} from 'solid-js/web'
-import {ISettingsStoreObject} from './settings-store'
-import {MBanner} from './components/m-banner/m-banner'
-import styles from './settings.module.scss'
-import {MSwitch} from './components/m-switch'
-import {ISettings} from '../../utils/settings'
-import {MNumberInput} from './components/m-text-field/m-number-input'
-import {MButton} from './components/m-button/m-button'
+import { Show } from "solid-js/web";
+import { ISettingsStoreObject } from "./settings-store";
+import { MBanner } from "./components/m-banner/m-banner";
+import styles from "./settings.module.scss";
+import { MSwitch } from "./components/m-switch";
+import { ISettings } from "../../utils/settings";
+import { MNumberInput } from "./components/m-text-field/m-number-input";
+import { MButton } from "./components/m-button/m-button";
 
 interface IProps {
-  store: ISettingsStoreObject
-  setKeyboardShortcutsEnabled: (enabled: boolean) => void
-  setShortcutsBannerVisible: (visible: boolean) => void
-  setSettingsOptions: (options: Partial<ISettings>) => void
-  restoreDefaultSettings: () => void
+  store: ISettingsStoreObject;
+  setKeyboardShortcutsEnabled: (enabled: boolean) => void;
+  setShortcutsBannerVisible: (visible: boolean) => void;
+  setSettingsOptions: (options: Partial<ISettings>) => void;
+  restoreDefaultSettings: () => void;
 }
 
 export function SettingsForm(props: IProps) {
   return (
     <form class="settings__form">
-      <Show when={!props.store.isKeyboardShortcutsEnabled && props.store.isShortcutsBannerVisible}>
+      <Show
+        when={
+          !props.store.isKeyboardShortcutsEnabled &&
+          props.store.isShortcutsBannerVisible
+        }
+      >
         <MBanner
           icon="report_problem"
           message="Keyboard shortcuts are not configured. You can set them in Chrome settings."
           actionMessage="Set up shortcuts"
           onAction={() => {
-            props.setShortcutsBannerVisible(false)
+            props.setShortcutsBannerVisible(false);
             chrome.tabs.create({
               active: true,
-              url: 'chrome://extensions/shortcuts#:~:text=Popup%20Tab%20Switcher',
-            })
+              url: "chrome://extensions/shortcuts#:~:text=Popup%20Tab%20Switcher",
+            });
           }}
           onDismiss={() => {
-            props.setShortcutsBannerVisible(false)
-            props.setKeyboardShortcutsEnabled(true)
+            props.setShortcutsBannerVisible(false);
+            props.setKeyboardShortcutsEnabled(true);
           }}
         />
       </Show>
       <div class={styles.settings__row} title="Turns on or off the dark theme">
-        <label for="isDarkTheme" class={styles.settings__label} data-test="darkModeToggle">
+        <label
+          for="isDarkTheme"
+          class={styles.settings__label}
+          data-test="darkModeToggle"
+        >
           <i class={styles.iconInLabel}>brightness_3</i>
           Dark theme
         </label>
@@ -45,7 +54,9 @@ export function SettingsForm(props: IProps) {
           id="isDarkTheme"
           isOn={props.store.settings.isDarkTheme}
           onToggle={() => {
-            props.setSettingsOptions({isDarkTheme: !props.store.settings.isDarkTheme})
+            props.setSettingsOptions({
+              isDarkTheme: !props.store.settings.isDarkTheme,
+            });
           }}
         />
       </div>
@@ -59,7 +70,7 @@ export function SettingsForm(props: IProps) {
           suffix="px"
           value={props.store.settings.popupWidth}
           onInput={(value) => {
-            props.setSettingsOptions({popupWidth: value})
+            props.setSettingsOptions({ popupWidth: value });
           }}
         />
       </div>
@@ -73,7 +84,7 @@ export function SettingsForm(props: IProps) {
           suffix="px"
           value={props.store.settings.tabHeight}
           onInput={(value) => {
-            props.setSettingsOptions({tabHeight: value})
+            props.setSettingsOptions({ tabHeight: value });
           }}
         />
       </div>
@@ -89,11 +100,14 @@ export function SettingsForm(props: IProps) {
           id="numberOfTabsToShow"
           value={props.store.settings.numberOfTabsToShow}
           onInput={(value) => {
-            props.setSettingsOptions({numberOfTabsToShow: value})
+            props.setSettingsOptions({ numberOfTabsToShow: value });
           }}
         />
       </div>
-      <div class={styles.settings__row} title="Sets the size of the tab title text">
+      <div
+        class={styles.settings__row}
+        title="Sets the size of the tab title text"
+      >
         <label for="fontSize" class={styles.settings__label}>
           <i class={styles.iconInLabel}>format_size</i>
           Font size
@@ -103,7 +117,7 @@ export function SettingsForm(props: IProps) {
           suffix="px"
           value={props.store.settings.fontSize}
           onInput={(value) => {
-            props.setSettingsOptions({fontSize: value})
+            props.setSettingsOptions({ fontSize: value });
           }}
         />
       </div>
@@ -117,11 +131,14 @@ export function SettingsForm(props: IProps) {
           suffix="px"
           value={props.store.settings.iconSize}
           onInput={(value) => {
-            props.setSettingsOptions({iconSize: value})
+            props.setSettingsOptions({ iconSize: value });
           }}
         />
       </div>
-      <div class={styles.settings__row} title="Sets popup opacity (0 - invisible, 100 - visible)">
+      <div
+        class={styles.settings__row}
+        title="Sets popup opacity (0 - invisible, 100 - visible)"
+      >
         <label for="opacity" class={styles.settings__label}>
           <i class={styles.iconInLabel}>opacity</i>
           Opacity
@@ -133,7 +150,7 @@ export function SettingsForm(props: IProps) {
           min={0}
           max={100}
           onInput={(value) => {
-            props.setSettingsOptions({opacity: value})
+            props.setSettingsOptions({ opacity: value });
           }}
         />
       </div>
@@ -150,7 +167,7 @@ export function SettingsForm(props: IProps) {
           suffix="ms"
           value={props.store.settings.autoSwitchingTimeout}
           onInput={(value) => {
-            props.setSettingsOptions({autoSwitchingTimeout: value})
+            props.setSettingsOptions({ autoSwitchingTimeout: value });
           }}
         />
       </div>
@@ -167,11 +184,14 @@ export function SettingsForm(props: IProps) {
           suffix="ms"
           value={props.store.settings.textScrollDelay}
           onInput={(value) => {
-            props.setSettingsOptions({textScrollDelay: value})
+            props.setSettingsOptions({ textScrollDelay: value });
           }}
         />
       </div>
-      <div class={styles.settings__row} title="Sets the speed of a selected tab text scrolling">
+      <div
+        class={styles.settings__row}
+        title="Sets the speed of a selected tab text scrolling"
+      >
         <label for="textScrollSpeed" class={styles.settings__label}>
           <i class={styles.iconInLabel}>text_rotation_none</i>
           Text scroll speed
@@ -181,7 +201,7 @@ export function SettingsForm(props: IProps) {
           suffix="%"
           value={Math.round(props.store.settings.textScrollSpeed * 100)}
           onInput={(value) => {
-            props.setSettingsOptions({textScrollSpeed: value / 100})
+            props.setSettingsOptions({ textScrollSpeed: value / 100 });
           }}
         />
       </div>
@@ -189,7 +209,10 @@ export function SettingsForm(props: IProps) {
         class={styles.settings__row}
         title="Switch to a previously active tab when the current one closes"
       >
-        <label for="isSwitchingToPreviouslyUsedTab" class={styles.settings__label}>
+        <label
+          for="isSwitchingToPreviouslyUsedTab"
+          class={styles.settings__label}
+        >
           <i class={styles.iconInLabel}>low_priority</i>
           Switch to a previously used tab
         </label>
@@ -198,8 +221,9 @@ export function SettingsForm(props: IProps) {
           isOn={props.store.settings.isSwitchingToPreviouslyUsedTab}
           onToggle={() => {
             props.setSettingsOptions({
-              isSwitchingToPreviouslyUsedTab: !props.store.settings.isSwitchingToPreviouslyUsedTab,
-            })
+              isSwitchingToPreviouslyUsedTab:
+                !props.store.settings.isSwitchingToPreviouslyUsedTab,
+            });
           }}
         />
       </div>
@@ -215,7 +239,27 @@ export function SettingsForm(props: IProps) {
           id="isStayingOpen"
           isOn={props.store.settings.isStayingOpen}
           onToggle={() => {
-            props.setSettingsOptions({isStayingOpen: !props.store.settings.isStayingOpen})
+            props.setSettingsOptions({
+              isStayingOpen: !props.store.settings.isStayingOpen,
+            });
+          }}
+        />
+      </div>
+      <div
+        class={styles.settings__row}
+        title="When enabled, moving the mouse over a tab will immediately select it"
+      >
+        <label for="isHoverSelectingTab" class={styles.settings__label}>
+          <i class={styles.iconInLabel}>ads_click</i>
+          Hover selects tab
+        </label>
+        <MSwitch
+          id="isHoverSelectingTab"
+          isOn={props.store.settings.isHoverSelectingTab}
+          onToggle={() => {
+            props.setSettingsOptions({
+              isHoverSelectingTab: !props.store.settings.isHoverSelectingTab,
+            });
           }}
         />
       </div>
@@ -228,5 +272,5 @@ export function SettingsForm(props: IProps) {
         />
       </div>
     </form>
-  )
+  );
 }

@@ -1,18 +1,19 @@
-type LocalStorageArea = chrome.storage.LocalStorageArea
+type LocalStorageArea = chrome.storage.LocalStorageArea;
 
 export interface ISettings {
-  textScrollDelay: number
-  textScrollSpeed: number
-  autoSwitchingTimeout: number
-  numberOfTabsToShow: number
-  isDarkTheme: boolean
-  popupWidth: number
-  tabHeight: number
-  fontSize: number
-  iconSize: number
-  opacity: number
-  isSwitchingToPreviouslyUsedTab: boolean
-  isStayingOpen: boolean
+  textScrollDelay: number;
+  textScrollSpeed: number;
+  autoSwitchingTimeout: number;
+  numberOfTabsToShow: number;
+  isDarkTheme: boolean;
+  popupWidth: number;
+  tabHeight: number;
+  fontSize: number;
+  iconSize: number;
+  opacity: number;
+  isSwitchingToPreviouslyUsedTab: boolean;
+  isStayingOpen: boolean;
+  isHoverSelectingTab: boolean;
 }
 
 export const defaultSettings: ISettings = {
@@ -28,26 +29,29 @@ export const defaultSettings: ISettings = {
   opacity: 100,
   isSwitchingToPreviouslyUsedTab: true,
   isStayingOpen: false,
-}
+  isHoverSelectingTab: false,
+};
 
 export interface ISettingsService extends ISettings {
-  update(settings: Partial<ISettings>): Promise<void>
-  reset(): Promise<void>
-  getSettingsObject(): ISettings
+  update(settings: Partial<ISettings>): Promise<void>;
+  reset(): Promise<void>;
+  getSettingsObject(): ISettings;
 }
 
-export async function getSettings(storage: LocalStorageArea): Promise<ISettingsService> {
-  const {settings: stored} = await storage.get('settings')
+export async function getSettings(
+  storage: LocalStorageArea
+): Promise<ISettingsService> {
+  const { settings: stored } = await storage.get("settings");
   return {
     ...defaultSettings,
     ...stored,
     async update(this: ISettingsService, newSettings: Partial<ISettings>) {
-      Object.assign(this, newSettings)
-      await storage.set({settings: this.getSettingsObject()})
+      Object.assign(this, newSettings);
+      await storage.set({ settings: this.getSettingsObject() });
     },
     async reset() {
-      Object.assign(this, defaultSettings)
-      await storage.set({settings: defaultSettings})
+      Object.assign(this, defaultSettings);
+      await storage.set({ settings: defaultSettings });
     },
     getSettingsObject(this: ISettingsService): ISettings {
       return {
@@ -63,7 +67,8 @@ export async function getSettings(storage: LocalStorageArea): Promise<ISettingsS
         opacity: this.opacity,
         isSwitchingToPreviouslyUsedTab: this.isSwitchingToPreviouslyUsedTab,
         isStayingOpen: this.isStayingOpen,
-      }
+        isHoverSelectingTab: this.isHoverSelectingTab,
+      };
     },
-  }
+  };
 }
