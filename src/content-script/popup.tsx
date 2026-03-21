@@ -380,11 +380,9 @@ export function Popup({ element }: IProps) {
       return;
     }
     if (["Alt", "Control", "Meta"].includes(event.key)) {
-      if (!isMouseOverCard) {
-        const selectedTab = store.tabs[store.selectedTabIndex];
-        if (selectedTab) {
-          switchTo(selectedTab);
-        }
+      const selectedTab = store.tabs[store.selectedTabIndex];
+      if (selectedTab) {
+        switchTo(selectedTab);
       }
       event.preventDefault();
       event.stopPropagation();
@@ -398,7 +396,7 @@ export function Popup({ element }: IProps) {
     if (Date.now() < suppressAutoCloseUntil) {
       return;
     }
-    if (!isMouseOverCard) {
+    if (!isMouseOverCard || !store.settings.isStayingOpen) {
       closePopup();
     }
   }

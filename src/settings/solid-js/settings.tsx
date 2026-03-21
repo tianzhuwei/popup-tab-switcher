@@ -1,11 +1,15 @@
-import {render} from 'solid-js/web'
-import styles from './settings.module.scss'
-import {createSettingsStore, ISettingsStore, IStoreSettingsService} from './settings-store'
-import {SettingsForm} from './settings-form'
-import areShortcutsSet from '../../utils/are-shortcuts-set'
+import { render } from "solid-js/web";
+import styles from "./settings.module.scss";
+import {
+  createSettingsStore,
+  ISettingsStore,
+  IStoreSettingsService,
+} from "./settings-store";
+import { SettingsForm } from "./settings-form";
+import areShortcutsSet from "../../utils/are-shortcuts-set";
 
 interface ISettingsProps {
-  settingsStore: ISettingsStore
+  settingsStore: ISettingsStore;
 }
 
 export function Settings(props: ISettingsProps) {
@@ -15,11 +19,11 @@ export function Settings(props: ISettingsProps) {
     setShortcutsBannerVisible,
     setSettingsOptions,
     restoreDefaultSettings,
-  } = props.settingsStore
+  } = props.settingsStore;
   return (
     <div
       class={`${styles.settings} mdc-typography`}
-      classList={{[styles.settings_dark]: store.settings.isDarkTheme}}
+      classList={{ [styles.settings_dark]: store.settings.isDarkTheme }}
       data-test="settings"
     >
       <SettingsForm
@@ -30,30 +34,34 @@ export function Settings(props: ISettingsProps) {
         restoreDefaultSettings={restoreDefaultSettings}
       />
     </div>
-  )
+  );
 }
 
-export async function renderSettingsPage(settingsService: IStoreSettingsService) {
-  const [initialSettings, areShortcutsEnabled, shortcutsBannerSeen] = await Promise.all([
-    settingsService.getSettingsObject(),
-    areShortcutsSet(),
-    getShortcutsBannerSeen(),
-  ])
-  const isShortcutsBannerVisible = !areShortcutsEnabled && !shortcutsBannerSeen
+export async function renderSettingsPage(
+  settingsService: IStoreSettingsService
+) {
+  const [initialSettings, areShortcutsEnabled, shortcutsBannerSeen] =
+    await Promise.all([
+      settingsService.getSettingsObject(),
+      areShortcutsSet(),
+      getShortcutsBannerSeen(),
+    ]);
+  const isShortcutsBannerVisible = !areShortcutsEnabled && !shortcutsBannerSeen;
   if (isShortcutsBannerVisible) {
-    chrome.storage.local.set({shortcutsBannerSeen: true})
+    chrome.storage.local.set({ shortcutsBannerSeen: true });
   }
   const settingsStore = await createSettingsStore({
     settingsService,
     initialSettings,
     areShortcutsEnabled,
     isShortcutsBannerVisible,
-  })
-  window.settings = initialSettings
-  render(() => <Settings settingsStore={settingsStore} />, document.body)
+  });
+  render(() => <Settings settingsStore={settingsStore} />, document.body);
 }
 
 async function getShortcutsBannerSeen(): Promise<boolean> {
-  const {shortcutsBannerSeen} = await chrome.storage.local.get('shortcutsBannerSeen')
-  return Boolean(shortcutsBannerSeen)
+  const { shortcutsBannerSeen } = await chrome.storage.local.get(
+    "shortcutsBannerSeen"
+  );
+  return Boolean(shortcutsBannerSeen);
 }
