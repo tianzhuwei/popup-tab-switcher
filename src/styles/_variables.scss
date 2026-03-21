@@ -46,8 +46,10 @@ $color-blue-mariner-light: #4285f4;
   --card-border-color: rgba(0, 0, 0, 0.08);
   --tab_selected-background: #{$color-white};
   --tab_selected-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --tab_selected-glow: 0 0 0 1px rgba(26, 115, 232, 0.16),
+    0 0 18px rgba(26, 115, 232, 0.18);
   --tab_hover-background: #{$color-gray-50};
-  --tab__timeoutIndicator-background: #{$color-blue-primary};
+  --tab_accent-color: #{$color-blue-primary};
   --tab__icon_noFavIcon-fill: #{$color-gray-500};
   --scrollbar-thumb: #{$color-gray-300};
   --scrollbar-track: transparent;
@@ -60,8 +62,10 @@ $color-blue-mariner-light: #4285f4;
   --card-border-color: #{$color-dark-border};
   --tab_selected-background: #{$color-dark-surface-active};
   --tab_selected-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --tab_selected-glow: 0 0 0 1px rgba(138, 180, 248, 0.24),
+    0 0 20px rgba(138, 180, 248, 0.22);
   --tab_hover-background: #{$color-dark-surface-hover};
-  --tab__timeoutIndicator-background: #{$color-blue-lighter};
+  --tab_accent-color: #{$color-blue-lighter};
   --tab__icon_noFavIcon-fill: #{$color-dark-text-secondary};
   --scrollbar-thumb: #{$color-gray-600};
   --scrollbar-track: transparent;

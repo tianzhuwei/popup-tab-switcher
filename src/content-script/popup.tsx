@@ -43,7 +43,6 @@ export function Popup({ element }: IProps) {
   // Stores the last active element before the popup was opened.
   const selectionAndFocus = new SelectionAndFocus();
   let cleanUpListeners = () => {};
-  let disposeAutoSwitchingTimeout: () => void = () => {};
 
   // Mouse hover state tracking
   let isMouseOverCard = false;
@@ -73,7 +72,6 @@ export function Popup({ element }: IProps) {
   onCleanup(() => {
     log(`[stop switcher]`);
     cleanUpListeners();
-    disposeAutoSwitchingTimeout();
     clearMouseIdleTimeout();
     chrome.runtime.sendMessage(contentScriptStopped());
   });
@@ -152,9 +150,6 @@ export function Popup({ element }: IProps) {
                   isFirst={index() === 0}
                   isLast={index() === store.tabs.length - 1}
                   isSelected={index() === store.selectedTabIndex}
-                  isTimeoutShown={
-                    index() === store.selectedTabIndex && !document.hasFocus()
-                  }
                   isPinned={isPinned(tab.id!)}
                   onTogglePin={() => {
                     suppressAutoClose();
@@ -219,8 +214,6 @@ export function Popup({ element }: IProps) {
     const popupBorderRadius = 12;
     const tabHorizontalPadding = 12;
     const tabTextPadding = 12;
-    const tabTimeoutIndicatorHeight = 3;
-
     element.style.setProperty("--popup-width", `${popupWidth / zoomFactor}px`);
     element.style.setProperty(
       "--popup-max-height",
@@ -239,10 +232,6 @@ export function Popup({ element }: IProps) {
       "--tab-text-padding",
       `${tabTextPadding / zoomFactor}px`
     );
-    element.style.setProperty(
-      "--tab-timeout-indicator-height",
-      `${tabTimeoutIndicatorHeight / zoomFactor}px`
-    );
     element.style.setProperty("--font-size", `${fontSize / zoomFactor}px`);
     element.style.setProperty("--icon-size", `${iconSize / zoomFactor}px`);
   }
@@ -252,10 +241,6 @@ export function Popup({ element }: IProps) {
     element.style.setProperty(
       "--popup-opacity",
       `${store.settings.opacity / 100}`
-    );
-    element.style.setProperty(
-      "--time-auto-switch-timeout",
-      `${store.settings.autoSwitchingTimeout}ms`
     );
     setStylePropertiesThatDependOnPageZoom();
   }
@@ -298,21 +283,6 @@ export function Popup({ element }: IProps) {
         await syncStoreWithBackground();
         openPopup();
         selectNextTab(increment);
-        // When the focus is on the address bar or the 'search in the page' field
-        // then the extension should switch a tab at the end of a timer.
-        // Because there is no way to handle key pressings when a page has no focus.
-        // https://stackoverflow.com/a/20940788/3167855
-        if (!document.hasFocus()) {
-          disposeAutoSwitchingTimeout();
-
-          const timeout = window.setTimeout(() => {
-            switchTo(store.tabs[store.selectedTabIndex]);
-          }, store.settings.autoSwitchingTimeout);
-
-          disposeAutoSwitchingTimeout = () => {
-            window.clearTimeout(timeout);
-          };
-        }
       },
     });
     chrome.runtime.onMessage.addListener(messageListener);
@@ -445,9 +415,8 @@ export function Popup({ element }: IProps) {
   }
 
   /**
-   * When PDF file opens 'document.hasFocus() === false' which turns ON
-   * the auto switching behaviour by timer.
-   * This fix force focus the PDF embed element and solves the issue.
+   * PDF 页面里 document 可能拿不到焦点。
+   * 这里主动把焦点还给 embed，避免快捷键切换时行为异常。
    * More on this:
    * https://stackoverflow.com/questions/58702747/window-events-with-pdf-document-via-chrome/75570258#75570258
    */

@@ -3,7 +3,6 @@ type LocalStorageArea = chrome.storage.LocalStorageArea;
 export interface ISettings {
   textScrollDelay: number;
   textScrollSpeed: number;
-  autoSwitchingTimeout: number;
   numberOfTabsToShow: number;
   isDarkTheme: boolean;
   popupWidth: number;
@@ -19,7 +18,6 @@ export interface ISettings {
 export const defaultSettings: ISettings = {
   textScrollDelay: 1000,
   textScrollSpeed: 1,
-  autoSwitchingTimeout: 1000,
   numberOfTabsToShow: 7,
   isDarkTheme: false,
   popupWidth: 420,
@@ -57,7 +55,6 @@ export async function getSettings(
       return {
         textScrollDelay: this.textScrollDelay,
         textScrollSpeed: this.textScrollSpeed,
-        autoSwitchingTimeout: this.autoSwitchingTimeout,
         numberOfTabsToShow: this.numberOfTabsToShow,
         isDarkTheme: this.isDarkTheme,
         popupWidth: this.popupWidth,

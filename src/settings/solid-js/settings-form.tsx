@@ -156,23 +156,6 @@ export function SettingsForm(props: IProps) {
       </div>
       <div
         class={styles.settings__row}
-        title="If a page has no focus (address bar or search field is focused, etc.) then the extension starts a timer by the end of which it will switch a user to the selected tab. This timer restarts on each selection command (Alt+Y or Alt+Shift+Y by default)"
-      >
-        <label for="autoSwitchingTimeout" class={styles.settings__label}>
-          <i class={styles.iconInLabel}>timelapse</i>
-          Auto switching timeout
-        </label>
-        <MNumberInput
-          id="autoSwitchingTimeout"
-          suffix="ms"
-          value={props.store.settings.autoSwitchingTimeout}
-          onInput={(value) => {
-            props.setSettingsOptions({ autoSwitchingTimeout: value });
-          }}
-        />
-      </div>
-      <div
-        class={styles.settings__row}
         title="If a tab title is wider than the popup then its overflowing part will be hidden. When such a tab is selected its text will be scrolled. This option delays the start of the scrolling"
       >
         <label for="textScrollDelay" class={styles.settings__label}>

@@ -1,10 +1,8 @@
-import { Show } from "solid-js/web";
 import { createEffect } from "solid-js";
 import { TabIcon, PinIcon, CloseIcon } from "./icons";
 
 interface IProps {
   isSelected: boolean;
-  isTimeoutShown: boolean;
   isLast: boolean;
   isFirst: boolean;
   isPinned: boolean;
@@ -56,10 +54,8 @@ export function PopupTab(props: IProps) {
       }}
       onClick={props.onClick}
       onMouseEnter={props.onHover}
+      onMouseMove={props.onHover}
     >
-      <Show when={props.isTimeoutShown}>
-        <div class="tab__timeoutIndicator" />
-      </Show>
       <button
         class="tab__closeButton"
         onClick={handleCloseClick}

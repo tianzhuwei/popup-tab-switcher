@@ -3,7 +3,6 @@
 // NOTE: naming blockName__elementName_modName_modVal
 // this BEM naming scheme can be used in JS without quotes
 :host {
-  --time-auto-switch-timeout: 500ms;
   --popup-opacity: 1;
 
   --popup-width: 0;
@@ -12,7 +11,6 @@
   --tab-height: 0;
   --tab-horizontal-padding: 0;
   --tab-text-padding: 0;
-  --tab-timeout-indicator-height: 0;
   --font-size: 0;
   --icon-size: 0;
   --title-fading-zone-z-index: 1;
@@ -120,13 +118,27 @@
   &:hover {
     --text-crop-gradient-color: var(--tab_hover-background);
     background-color: var(--tab_hover-background);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   }
 
   &.tab_selected,
   &.tab_selected:hover {
     --text-crop-gradient-color: var(--tab_selected-background);
     background-color: var(--tab_selected-background);
-    box-shadow: var(--tab_selected-shadow);
+    box-shadow: var(--tab_selected-shadow), var(--tab_selected-glow);
+  }
+
+  &.tab_selected::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 4px;
+    border-radius: 0 999px 999px 0;
+    background: var(--tab_accent-color);
+    box-shadow: 0 0 12px var(--tab_accent-color);
+    z-index: 1;
   }
 }
 
@@ -207,29 +219,8 @@
   letter-spacing: -0.01em;
 }
 
-.tab:hover .tab__textContent {
-  transform: translateX(2px);
-}
-
-.tab__timeoutIndicator {
-  position: absolute;
-  width: calc(100% - 12px);
-  height: var(--tab-timeout-indicator-height);
-  background: var(--tab__timeoutIndicator-background);
-  bottom: 4px;
-  left: 6px;
-  border-radius: 2px;
-  animation-name: shrunk-indicator;
-  animation-duration: var(--time-auto-switch-timeout);
-  animation-timing-function: linear;
-  animation-fill-mode: forwards;
-  z-index: calc(var(--title-fading-zone-z-index) + 1);
-}
-
-@keyframes shrunk-indicator {
-  to {
-    width: 0;
-  }
+.tab.tab_selected .tab__textContent {
+  font-weight: 600;
 }
 
 // Close button styles
@@ -297,7 +288,7 @@
 
   &_pinned {
     opacity: 1;
-    color: var(--tab__timeoutIndicator-background);
+    color: var(--tab_accent-color);
   }
 }
 
