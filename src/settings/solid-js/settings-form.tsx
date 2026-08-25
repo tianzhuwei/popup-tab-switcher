@@ -246,6 +246,28 @@ export function SettingsForm(props: IProps) {
           }}
         />
       </div>
+      <div
+        class={styles.settings__row}
+        title="When enabled, the switcher shows tabs from all browser windows. When disabled, only tabs from the current window are shown"
+      >
+        <label
+          for="isShowingTabsFromAllWindows"
+          class={styles.settings__label}
+        >
+          <i class={styles.iconInLabel}>select_all</i>
+          Show tabs from all windows
+        </label>
+        <MSwitch
+          id="isShowingTabsFromAllWindows"
+          isOn={props.store.settings.isShowingTabsFromAllWindows}
+          onToggle={() => {
+            props.setSettingsOptions({
+              isShowingTabsFromAllWindows:
+                !props.store.settings.isShowingTabsFromAllWindows,
+            });
+          }}
+        />
+      </div>
       <div class={styles.bottomActions}>
         <MButton
           icon="restore"

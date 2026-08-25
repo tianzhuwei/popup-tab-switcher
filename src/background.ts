@@ -231,13 +231,19 @@ function messageHandlers(): Partial<IHandlers> {
         // TODO: Show extension in a separate window
       }
     },
-    [Message.GET_MODEL]: async () => {
+    [Message.GET_MODEL]: async (_m, sender) => {
       const settings = await ServiceFactory.getSettings();
       const registry = await ServiceFactory.getTabRegistry();
       const activeTab = registry.getActive();
       const previousTab = registry.getPreviouslyActive();
+      const senderWindowId = sender.tab?.windowId;
+      const tabs = settings.isShowingTabsFromAllWindows
+        ? registry.getTabsToShow()
+        : registry
+            .getTabsToShow()
+            .filter((tab) => tab.windowId === senderWindowId);
       return {
-        tabs: registry.getTabsToShow() as chrome.tabs.Tab[],
+        tabs: tabs as chrome.tabs.Tab[],
         settings,
         zoomFactor: await chrome.tabs.getZoom(),
         pinnedTabIds: registry.getPinnedTabIds(),

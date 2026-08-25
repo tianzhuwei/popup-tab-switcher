@@ -8,7 +8,7 @@
   },
   "main": "index.js",
   "scripts": {
-    "build:dev": "rm -rf build-dev && webpack build --env development",
+    "build:dev": "webpack build --env development",
     "build:e2e": "rm -rf build-e2e && webpack build --env e2e",
     "build:prod": "ts-node ./scripts/build-prod.ts",
     "clean": "rm -rf build*",

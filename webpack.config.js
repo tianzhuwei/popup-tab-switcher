@@ -5,7 +5,9 @@ const deepmerge = require("deepmerge");
 const { exec } = require("child_process");
 
 const buildProdDir = path.join(__dirname, "build-prod");
-const buildDevDir = path.join(__dirname, "build-dev");
+// Chrome loads the unpacked extension from this directory,
+// so dev builds output directly there (auto-overwrite on rebuild).
+const buildDevDir = "/Applications/01-CrhomeExtension/TabPop";
 const buildE2eDir = path.join(__dirname, "build-e2e");
 const srcDir = path.join(__dirname, "src");
 const settingsDir = path.join(srcDir, "settings");
