@@ -1,6 +1,5 @@
 import {createStore} from 'solid-js/store'
 import {ISettings} from '../../utils/settings'
-import {IPageTab} from './components/m-tab-bar'
 
 export interface IStoreSettingsService {
   update(settings: Partial<ISettings>): Promise<void>
@@ -16,9 +15,7 @@ interface ISettingsStoreProps {
 }
 
 export interface ISettingsStore {
-  pageTabs: IPageTab[]
   restoreDefaultSettings: () => Promise<void>
-  setCurrentPageTab: (tabId: string) => void
   setKeyboardShortcutsEnabled: (enabled: boolean) => void
   setShortcutsBannerVisible: (visible: boolean) => void
   setSettingsOptions: (options: Partial<ISettings>) => void
@@ -27,14 +24,8 @@ export interface ISettingsStore {
 
 export interface ISettingsStoreObject {
   settings: ISettings
-  currentPageTabId: string
   isKeyboardShortcutsEnabled: boolean
   isShortcutsBannerVisible: boolean
-}
-
-export const enum PageTab {
-  Settings = 'settings',
-  Contribute = 'contribute',
 }
 
 export function createSettingsStore({
@@ -43,27 +34,18 @@ export function createSettingsStore({
   areShortcutsEnabled,
   isShortcutsBannerVisible,
 }: ISettingsStoreProps): ISettingsStore {
-  const pageTabs: IPageTab[] = [{id: PageTab.Settings, icon: 'settings'}]
-
   const [store, setStore] = createStore<ISettingsStoreObject>({
     settings: initialSettings, // Store can work only with plain objects.
-    currentPageTabId: PageTab.Settings,
     isKeyboardShortcutsEnabled: areShortcutsEnabled,
     isShortcutsBannerVisible,
   })
 
   return {
-    pageTabs,
     restoreDefaultSettings,
-    setCurrentPageTab,
     setKeyboardShortcutsEnabled,
     setShortcutsBannerVisible,
     setSettingsOptions,
     store,
-  }
-
-  function setCurrentPageTab(tabId: string) {
-    setStore({currentPageTabId: tabId})
   }
 
   function setKeyboardShortcutsEnabled(enabled: boolean) {

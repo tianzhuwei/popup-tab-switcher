@@ -1,4 +1,3 @@
-import { Command } from "./constants";
 import { ISettings } from "./settings";
 import { log } from "./logger";
 
@@ -6,25 +5,16 @@ type MessageSender = chrome.runtime.MessageSender;
 type Port = chrome.runtime.Port;
 type ChromeTab = chrome.tabs.Tab;
 
-// TODO: Rename Message entries to consistent PascalCase
 export enum Message {
   CLOSE_POPUP = "CLOSE_POPUP",
-  COMMAND = "COMMAND",
   ContentScriptStarted = "ContentScriptStarted",
   ContentScriptStopped = "ContentScriptStopped",
   DEMO_SETTINGS = "DEMO_SETTINGS",
-  E2E_IS_MESSAGING_READY = "E2E_IS_MESSAGING_READY",
-  E2E_IS_PAGE_ACTIVE = "E2E_IS_PAGE_ACTIVE",
-  E2E_RELOAD_EXTENSION = "E2E_RELOAD_EXTENSION",
-  E2E_RELOAD_EXTENSION_FINISHED = "E2E_RELOAD_EXTENSION_FINISHED",
   SetSettings = "SetSettings",
   GetSettings = "GetSettings",
-  E2E_SET_ZOOM = "E2E_SET_ZOOM",
   GET_MODEL = "GET_MODEL",
   SELECT_TAB = "SELECT_TAB",
   SWITCH_TAB = "SWITCH_TAB",
-  PopupShown = "PopupShown",
-  GetRenderingTime = "GetRenderingTime",
   TogglePinTab = "TogglePinTab",
   CloseTab = "CloseTab",
 }
@@ -35,14 +25,6 @@ export function demoSettings() {
 
 export function switchTab(selectedTab: ChromeTab) {
   return { type: Message.SWITCH_TAB, selectedTab } as const;
-}
-
-export function popupShown() {
-  return { type: Message.PopupShown } as const;
-}
-
-export function getRenderingTime() {
-  return { type: Message.GetRenderingTime } as const;
 }
 
 export function selectTab(increment: number) {
@@ -56,36 +38,12 @@ export function closePopup() {
   return { type: Message.CLOSE_POPUP } as const;
 }
 
-export function command(cmd: Command) {
-  return { type: Message.COMMAND, command: cmd } as const;
-}
-
-export function e2eSetZoom(zoomFactor: number) {
-  return { type: Message.E2E_SET_ZOOM, zoomFactor } as const;
-}
-
 export function setSettings(settings?: Partial<ISettings>) {
   return { type: Message.SetSettings, settings } as const;
 }
 
 export function getSettings() {
   return { type: Message.GetSettings } as const;
-}
-
-export function e2eIsPageActive() {
-  return { type: Message.E2E_IS_PAGE_ACTIVE } as const;
-}
-
-export function e2eIsMessagingReady() {
-  return { type: Message.E2E_IS_MESSAGING_READY } as const;
-}
-
-export function e2eReloadExtension() {
-  return { type: Message.E2E_RELOAD_EXTENSION } as const;
-}
-
-export function e2eReloadExtensionFinished() {
-  return { type: Message.E2E_RELOAD_EXTENSION_FINISHED } as const;
 }
 
 export function contentScriptStarted() {
@@ -110,24 +68,14 @@ export function closeTab(tabId: number) {
 
 interface IMessageTypeToObjectMap {
   [Message.CLOSE_POPUP]: ReturnType<typeof closePopup>;
-  [Message.COMMAND]: ReturnType<typeof command>;
   [Message.ContentScriptStarted]: ReturnType<typeof contentScriptStarted>;
   [Message.ContentScriptStopped]: ReturnType<typeof contentScriptStopped>;
   [Message.DEMO_SETTINGS]: ReturnType<typeof demoSettings>;
-  [Message.E2E_IS_MESSAGING_READY]: ReturnType<typeof e2eIsMessagingReady>;
-  [Message.E2E_IS_PAGE_ACTIVE]: ReturnType<typeof e2eIsPageActive>;
-  [Message.E2E_RELOAD_EXTENSION]: ReturnType<typeof e2eReloadExtension>;
-  [Message.E2E_RELOAD_EXTENSION_FINISHED]: ReturnType<
-    typeof e2eReloadExtensionFinished
-  >;
   [Message.SetSettings]: ReturnType<typeof setSettings>;
   [Message.GetSettings]: ReturnType<typeof getSettings>;
-  [Message.E2E_SET_ZOOM]: ReturnType<typeof e2eSetZoom>;
   [Message.GET_MODEL]: ReturnType<typeof getModel>;
   [Message.SELECT_TAB]: ReturnType<typeof selectTab>;
   [Message.SWITCH_TAB]: ReturnType<typeof switchTab>;
-  [Message.PopupShown]: ReturnType<typeof popupShown>;
-  [Message.GetRenderingTime]: ReturnType<typeof getRenderingTime>;
   [Message.TogglePinTab]: ReturnType<typeof togglePinTab>;
   [Message.CloseTab]: ReturnType<typeof closeTab>;
 }
@@ -146,14 +94,8 @@ export interface IGetModelResponse {
 export type IMessageResponse<Message extends IMessage> =
   Message extends ReturnType<typeof getModel>
     ? IGetModelResponse
-    : Message extends ReturnType<typeof e2eIsPageActive>
-    ? boolean
-    : Message extends ReturnType<typeof e2eIsMessagingReady>
-    ? boolean
     : Message extends ReturnType<typeof getSettings>
     ? ISettings
-    : Message extends ReturnType<typeof getRenderingTime>
-    ? number
     : void;
 
 export type IHandlers = {

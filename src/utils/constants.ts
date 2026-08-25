@@ -1,6 +1,5 @@
 export enum Port {
-  POPUP_SCRIPT = 'POPUP_SCRIPT', // Rename to Settings, remove Commands bridge
-  COMMANDS_BRIDGE = 'COMMANDS_BRIDGE',
+  POPUP_SCRIPT = 'POPUP_SCRIPT',
 }
 
 export enum Command {

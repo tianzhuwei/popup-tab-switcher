@@ -144,7 +144,7 @@ export function createPopupStore() {
   }
 }
 
-export function rangedIncrement(
+function rangedIncrement(
   number: number,
   increment: number,
   maxInteger: number

@@ -13,18 +13,12 @@ import { createPopupStore } from "./popup-store";
 import { PopupTab } from "./popup-tab";
 import uuid from "../utils/uuid";
 import { SelectionAndFocus } from "./selection-and-focus";
-import { PopupTestHelper } from "./popup-test-helper";
 import { createThemeMode } from "../utils/use-theme-mode";
 
 type ITab = chrome.tabs.Tab;
 
 interface IProps {
   element: HTMLElement;
-}
-
-let testHelper: undefined | PopupTestHelper;
-if (E2E) {
-  testHelper = new PopupTestHelper();
 }
 
 export function Popup({ element }: IProps) {
@@ -124,7 +118,6 @@ export function Popup({ element }: IProps) {
     if (store.isOpen) {
       selectionAndFocus.saveState();
       showOverlay();
-      testHelper?.popupShown();
     } else {
       element.style.display = "none";
       selectionAndFocus.apply();

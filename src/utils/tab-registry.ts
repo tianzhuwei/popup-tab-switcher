@@ -15,7 +15,7 @@ interface IInitializedTabs {
   [key: number]: ITab
 }
 
-export interface ITabInitialization {
+interface ITabInitialization {
   resolver: (status: boolean) => void
   promise: Promise<boolean>
   timeout: number
@@ -65,16 +65,8 @@ export default class TabRegistry {
     this.onPinnedUpdate(this.getPinnedTabIds())
   }
 
-  isPinned(tabId: number): boolean {
-    return this.pinnedTabIds.has(tabId)
-  }
-
   getPinnedTabIds(): number[] {
     return Array.from(this.pinnedTabIds)
-  }
-
-  setPinnedTabIds(pinnedTabIds: number[]) {
-    this.pinnedTabIds = new Set(pinnedTabIds)
   }
 
   addToInitialized(tab: ITab) {

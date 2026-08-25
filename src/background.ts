@@ -12,7 +12,6 @@ import { isBrowserFocused } from "./utils/is-browser-focused";
 import { checkTab, ITab } from "./utils/check-tab";
 import { log } from "./utils/logger";
 import { ServiceFactory } from "./service-factory";
-import { BackgroundTestHelper } from "./background/background-test-helper";
 import { getActiveTab } from "./background/get-active-tab";
 
 type ChromeTab = chrome.tabs.Tab;
@@ -22,12 +21,6 @@ const suppressAutoSwitchTabIds = new Set<number>();
 // NOTE: This is somehow related to the test "focuses previously active window on a tab closing".
 // TODO: Describe the problem in more details.
 let tabIdToBeActivated: undefined | number;
-let testHelper: undefined | BackgroundTestHelper;
-if (E2E) {
-  testHelper = new BackgroundTestHelper();
-  testHelper.initContentScript();
-  testHelper.registerListeners();
-}
 
 if (DEVELOPMENT) {
   chrome.tabs.onCreated.addListener(async (tab) => {
@@ -57,8 +50,7 @@ function initListeners() {
   chrome.tabs.onRemoved.addListener(handleTabRemove);
   chrome.runtime.onConnect.addListener(handleConnection);
   chrome.commands.onCommand.addListener(handleCommand);
-  const handlers = { ...messageHandlers(), ...testHelper?.messageHandlers };
-  chrome.runtime.onMessage.addListener(handleMessage(handlers));
+  chrome.runtime.onMessage.addListener(handleMessage(messageHandlers()));
   if (PRODUCTION) {
     initForProduction();
   }
@@ -76,8 +68,7 @@ async function switchToPreviousTab() {
   }
 }
 
-export async function handleCommand(command: string) {
-  testHelper?.measureStartRenderingTime();
+async function handleCommand(command: string) {
   const activeTab = await getActiveTab();
   if (!activeTab) {
     return;

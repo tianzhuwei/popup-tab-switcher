@@ -10,21 +10,6 @@ function getFaviconUrl(url: string) {
   return faviconUrl.href;
 }
 
-export function TabCornerIcon(props: { type: "top" | "bottom" }) {
-  const tabCornerType =
-    props.type === "top" ? "tab__cornerIcon_top" : "tab__cornerIcon_bottom";
-  return (
-    <svg
-      class={`tab__cornerIcon ${tabCornerType}`}
-      viewBox="0 0 8 8"
-      preserveAspectRatio="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path d="M0 0C0 4.41828 3.58172 8 8 8H0V0Z" />
-    </svg>
-  );
-}
-
 export function TabIcon(props: { url: string | undefined; title?: string }) {
   const [hasError, setHasError] = createSignal(false);
   const url = createMemo(() => {

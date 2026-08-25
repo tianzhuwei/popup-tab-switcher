@@ -6,7 +6,6 @@ import styles from "./settings.module.scss";
 import { MSwitch } from "./components/m-switch";
 import { ISettings, ThemeMode } from "../../utils/settings";
 import { MNumberInput } from "./components/m-text-field/m-number-input";
-import { MButton } from "./components/m-button/m-button";
 
 interface IProps {
   store: ISettingsStoreObject;
@@ -314,16 +313,17 @@ export function SettingsForm(props: IProps) {
             }}
           />
         </Row>
-      </Section>
-
-      <div class={styles.bottomActions}>
-        <MButton
-          icon="restore"
-          text="Set defaults"
+        <button
+          type="button"
+          class={styles.resetRow}
+          title="Restore every setting to its default value"
           onClick={props.restoreDefaultSettings}
-          testId="resetButton"
-        />
-      </div>
+          data-test="resetButton"
+        >
+          <i class={styles.iconInLabel}>restore</i>
+          <span class={styles.resetRow__text}>Reset all to defaults</span>
+        </button>
+      </Section>
     </form>
   );
 }

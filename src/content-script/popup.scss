@@ -142,16 +142,6 @@
   }
 }
 
-// Remove corner icons - not needed with new rounded design
-.tab__cornerIcon {
-  display: none;
-}
-
-.tab__cornerIcon_bottom,
-.tab__cornerIcon_top {
-  display: none;
-}
-
 .tab__icon {
   height: var(--icon-size);
   width: var(--icon-size);
@@ -161,11 +151,6 @@
   border-radius: 4px;
   flex-shrink: 0;
   image-rendering: -webkit-optimize-contrast; /* Fix for blurry icons */
-
-  &_noFavIcon {
-    fill: var(--tab__icon_noFavIcon-fill);
-    opacity: 0.7;
-  }
 
   &_letter {
     display: inline-flex;
