@@ -1,4 +1,4 @@
-import { createMemo } from "solid-js";
+import { createMemo, createSignal } from "solid-js";
 import { Show } from "solid-js/web";
 
 function getFaviconUrl(url: string) {
@@ -8,24 +8,6 @@ function getFaviconUrl(url: string) {
   faviconUrl.searchParams.set("pageUrl", url);
   faviconUrl.searchParams.set("size", "64");
   return faviconUrl.href;
-}
-
-function NoFaviconIcon() {
-  return (
-    <svg
-      class="tab__icon tab__icon_noFavIcon"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        fill-rule="evenodd"
-        clip-rule="evenodd"
-        d="M12 2C17.52 2 22 6.48 22 12C22 17.52 17.52 22 12 22C6.48 22 2 17.52 2 12C2 6.48 6.48 2 12 2ZM4 12H8.4C11.81 12.02 13.32 13.73 12.94 17.13H9.49V19.6C10.7311 20.011 12.054 20.1115 13.3429 19.8928C14.6318 19.6741 15.8475 19.1429 16.8836 18.3456C17.9197 17.5483 18.7446 16.5093 19.2861 15.3193C19.8277 14.1294 20.0693 12.8249 19.99 11.52C19.33 12.5 18.33 13 17 13C14.86 13 13.79 12.08 13.79 10.25H10.04C9.77 7.52 10.72 6.16 12.91 6.16C12.91 5.19 13.24 4.56 13.72 4.19C12.5516 3.93277 11.3404 3.94089 10.1755 4.21374C9.01062 4.4866 7.92178 5.01725 6.98915 5.76662C6.05651 6.51599 5.30383 7.465 4.78652 8.54377C4.2692 9.62254 4.00044 10.8036 4 12V12Z"
-      />
-    </svg>
-  );
 }
 
 export function TabCornerIcon(props: { type: "top" | "bottom" }) {
@@ -43,18 +25,87 @@ export function TabCornerIcon(props: { type: "top" | "bottom" }) {
   );
 }
 
-export function TabIcon(props: { url: string | undefined }) {
+export function TabIcon(props: { url: string | undefined; title?: string }) {
+  const [hasError, setHasError] = createSignal(false);
   const url = createMemo(() => {
     if (!props.url) {
       return "";
     }
     return getFaviconUrl(props.url);
   });
+  const showFallback = createMemo(() => !url() || hasError());
   return (
-    <Show when={url()} keyed fallback={<NoFaviconIcon />}>
-      <img src={url()} class="tab__icon" />
-    </Show>
+    <>
+      <Show when={!showFallback()}>
+        <img
+          src={url()}
+          class="tab__icon"
+          onError={() => setHasError(true)}
+          alt=""
+        />
+      </Show>
+      <Show when={showFallback()}>
+        <LetterIcon title={props.title} url={props.url} />
+      </Show>
+    </>
   );
+}
+
+/**
+ * Renders a colored tile with the first letter of the site (hostname or
+ * title). Used when the tab has no favicon or the favicon fails to load.
+ */
+function LetterIcon(props: { title?: string; url?: string }) {
+  const letter = createMemo(() => {
+    const source = hostname(props.url) || props.title || "";
+    const ch = source.trim().charAt(0);
+    return ch ? ch.toUpperCase() : "?";
+  });
+  const color = createMemo(() => colorForKey(hostname(props.url) || letter()));
+  return (
+    <span
+      class="tab__icon tab__icon_letter"
+      style={{ "background-color": color() }}
+      aria-hidden="true"
+    >
+      {letter()}
+    </span>
+  );
+}
+
+function hostname(url?: string): string {
+  if (!url) {
+    return "";
+  }
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+// A small palette of pleasant, readable tile colors.
+const LETTER_COLORS = [
+  "#ef5350",
+  "#ec407a",
+  "#ab47bc",
+  "#7e57c2",
+  "#5c6bc0",
+  "#42a5f5",
+  "#26a69a",
+  "#66bb6a",
+  "#9ccc65",
+  "#ffa726",
+  "#8d6e63",
+  "#78909c",
+];
+
+function colorForKey(key: string): string {
+  let hash = 0;
+  for (let i = 0; i < key.length; i += 1) {
+    hash = (hash * 31 + key.charCodeAt(i)) | 0;
+  }
+  return LETTER_COLORS[Math.abs(hash) % LETTER_COLORS.length];
 }
 
 export function PinIcon(props: { isPinned: boolean }) {

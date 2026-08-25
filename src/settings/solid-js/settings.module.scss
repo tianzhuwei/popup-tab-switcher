@@ -59,6 +59,8 @@
 .settings__form {
   margin: 0;
   padding: 8px 12px;
+  // Keep the whole panel from scrolling; only expanded sections scroll.
+  overflow: hidden;
 }
 
 .settings__row {
@@ -78,6 +80,12 @@
 
   &:hover {
     background-color: var(--settings-row-hover);
+  }
+
+  // A row that only hosts the segmented theme control: no inner split.
+  &_segmented {
+    padding: 8px 16px;
+    justify-content: stretch;
   }
 }
 
@@ -111,4 +119,111 @@
   font-weight: 500;
   color: var(--settings-text-primary);
   letter-spacing: -0.01em;
+}
+
+// Collapsible section (second-level menu)
+.section {
+  margin-bottom: 8px;
+  background: var(--settings-card-background);
+  border: 1px solid var(--settings-border-color);
+  border-radius: 12px;
+  overflow: hidden;
+
+  &__header {
+    all: unset;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 16px;
+    min-height: 48px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+
+    &:hover {
+      background-color: var(--settings-row-hover);
+    }
+  }
+
+  &__title {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--settings-text-primary);
+    letter-spacing: -0.01em;
+  }
+
+  &__chevron {
+    margin-right: 0;
+    transition: transform 0.2s ease;
+    color: var(--settings-text-secondary);
+  }
+
+  &_open &__chevron {
+    transform: rotate(180deg);
+  }
+
+  &__body {
+    padding: 4px 8px 8px;
+    border-top: 1px solid var(--settings-border-color);
+    // Only the section content scrolls, not the whole settings panel.
+    max-height: 320px;
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    // Nested rows are flatter inside a group
+    .settings__row {
+      border: none;
+      background: transparent;
+      margin-bottom: 0;
+      border-radius: 8px;
+
+      &:hover {
+        background-color: var(--settings-row-hover);
+      }
+    }
+  }
+}
+
+// Segmented control for the theme mode (auto / light / dark)
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  width: 100%;
+  background: var(--settings-row-hover);
+  border-radius: 10px;
+  border: 1px solid var(--settings-border-color);
+
+  &__option {
+    all: unset;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--settings-text-secondary);
+    transition: background-color 0.15s ease, color 0.15s ease;
+    white-space: nowrap;
+
+    &:hover {
+      color: var(--settings-text-primary);
+    }
+
+    &_active {
+      background: var(--settings-card-background);
+      color: var(--settings-accent-color);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    }
+  }
+
+  &__icon {
+    composes: materialIcon from global;
+    font-size: 16px;
+  }
 }

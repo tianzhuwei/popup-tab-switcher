@@ -63,7 +63,7 @@ export function PopupTab(props: IProps) {
       >
         <CloseIcon />
       </button>
-      <TabIcon url={props.tab.url} />
+      <TabIcon url={props.tab.url} title={props.tab.title} />
       <div ref={tabTextElement!} class="tab__text">
         <span class="tab__textContent" ref={tabTextContentElement!}>
           {props.tab.title}

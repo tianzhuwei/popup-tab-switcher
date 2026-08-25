@@ -14,6 +14,7 @@ import { PopupTab } from "./popup-tab";
 import uuid from "../utils/uuid";
 import { SelectionAndFocus } from "./selection-and-focus";
 import { PopupTestHelper } from "./popup-test-helper";
+import { createThemeMode } from "../utils/use-theme-mode";
 
 type ITab = chrome.tabs.Tab;
 
@@ -40,6 +41,8 @@ export function Popup({ element }: IProps) {
   } = createPopupStore();
   // Prevents auto switching when the popup is opened.
   let isSettingsDemo = false;
+  // Resolves the effective theme (auto follows the OS, or a manual choice).
+  const isDark = createThemeMode(() => store.settings.themeMode);
   // Stores the last active element before the popup was opened.
   const selectionAndFocus = new SelectionAndFocus();
   let cleanUpListeners = () => {};
@@ -137,7 +140,7 @@ export function Popup({ element }: IProps) {
         <div class="overlay">
           <div
             class="card"
-            classList={{ card_dark: store.settings.isDarkTheme }}
+            classList={{ card_dark: isDark() }}
             data-test="card"
             onMouseEnter={onMouseEnterCard}
             onMouseLeave={onMouseLeaveCard}

@@ -1,10 +1,12 @@
 type LocalStorageArea = chrome.storage.LocalStorageArea;
 
+export type ThemeMode = "auto" | "light" | "dark";
+
 export interface ISettings {
   textScrollDelay: number;
   textScrollSpeed: number;
   numberOfTabsToShow: number;
-  isDarkTheme: boolean;
+  themeMode: ThemeMode;
   popupWidth: number;
   tabHeight: number;
   fontSize: number;
@@ -20,7 +22,7 @@ export const defaultSettings: ISettings = {
   textScrollDelay: 1000,
   textScrollSpeed: 1,
   numberOfTabsToShow: 7,
-  isDarkTheme: false,
+  themeMode: "auto",
   popupWidth: 420,
   tabHeight: 40,
   fontSize: 16,
@@ -32,6 +34,18 @@ export const defaultSettings: ISettings = {
   isShowingTabsFromAllWindows: true,
 };
 
+/**
+ * Migrates the legacy `isDarkTheme` boolean to the new `themeMode` field.
+ * Manual dark/light choices are preserved; the default becomes "auto".
+ */
+function migrateThemeMode(settings: ISettings): void {
+  const legacy = settings as Partial<ISettings> & { isDarkTheme?: boolean };
+  if (typeof legacy.isDarkTheme === "boolean") {
+    settings.themeMode = legacy.isDarkTheme ? "dark" : "light";
+    delete legacy.isDarkTheme;
+  }
+}
+
 export interface ISettingsService extends ISettings {
   update(settings: Partial<ISettings>): Promise<void>;
   reset(): Promise<void>;
@@ -42,9 +56,13 @@ export async function getSettings(
   storage: LocalStorageArea
 ): Promise<ISettingsService> {
   const { settings: stored } = await storage.get("settings");
-  return {
+  const merged: ISettings = {
     ...defaultSettings,
     ...stored,
+  };
+  migrateThemeMode(merged);
+  return {
+    ...merged,
     async update(this: ISettingsService, newSettings: Partial<ISettings>) {
       Object.assign(this, newSettings);
       await storage.set({ settings: this.getSettingsObject() });
@@ -58,7 +76,7 @@ export async function getSettings(
         textScrollDelay: this.textScrollDelay,
         textScrollSpeed: this.textScrollSpeed,
         numberOfTabsToShow: this.numberOfTabsToShow,
-        isDarkTheme: this.isDarkTheme,
+        themeMode: this.themeMode,
         popupWidth: this.popupWidth,
         tabHeight: this.tabHeight,
         fontSize: this.fontSize,

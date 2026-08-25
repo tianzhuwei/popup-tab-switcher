@@ -7,6 +7,7 @@ import {
 } from "./settings-store";
 import { SettingsForm } from "./settings-form";
 import areShortcutsSet from "../../utils/are-shortcuts-set";
+import { createThemeMode } from "../../utils/use-theme-mode";
 
 interface ISettingsProps {
   settingsStore: ISettingsStore;
@@ -20,10 +21,11 @@ export function Settings(props: ISettingsProps) {
     setSettingsOptions,
     restoreDefaultSettings,
   } = props.settingsStore;
+  const isDark = createThemeMode(() => store.settings.themeMode);
   return (
     <div
       class={`${styles.settings} mdc-typography`}
-      classList={{ [styles.settings_dark]: store.settings.isDarkTheme }}
+      classList={{ [styles.settings_dark]: isDark() }}
       data-test="settings"
     >
       <SettingsForm
