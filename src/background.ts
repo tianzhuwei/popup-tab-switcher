@@ -250,6 +250,9 @@ function messageHandlers(): Partial<IHandlers> {
       suppressAutoSwitchTabIds.add(tabId);
       await chrome.tabs.remove(tabId);
     },
+    [Message.CreateTab]: async (_m, sender) => {
+      await chrome.tabs.create({ windowId: sender.tab?.windowId });
+    },
     [Message.SetSettings]: async ({ settings }) => {
       log(`[Settings received]`, settings);
       const currentSettings = await ServiceFactory.getSettings();

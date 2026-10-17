@@ -92,6 +92,34 @@
   }
 }
 
+.card__newTabButton {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: var(--tab-height);
+  margin-top: 4px;
+  border-top: 1px solid var(--card-border-color);
+  border-radius: calc(var(--popup-border-radius) - 4px);
+  color: var(--tab__icon_noFavIcon-fill);
+  font-size: var(--icon-size);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    background-color: var(--tab_hover-background);
+    color: var(--tab_accent-color);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--tab_accent-color);
+    outline-offset: -2px;
+  }
+}
+
 .tab {
   display: flex;
   align-items: center;

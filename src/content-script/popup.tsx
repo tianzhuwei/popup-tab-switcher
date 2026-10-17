@@ -4,6 +4,7 @@ import styles from "./popup.scss";
 import {
   contentScriptStarted,
   contentScriptStopped,
+  createTab,
   handleMessage,
   Message,
   switchTab,
@@ -171,6 +172,15 @@ export function Popup({ element }: IProps) {
                 />
               )}
             </For>
+            <button
+              type="button"
+              class="card__newTabButton"
+              title="New tab"
+              aria-label="New tab"
+              onClick={openNewTab}
+            >
+              +
+            </button>
           </div>
         </div>
       </Show>
@@ -206,7 +216,7 @@ export function Popup({ element }: IProps) {
     const actualTabCount = store.tabs.length;
     const displayTabCount = Math.min(actualTabCount, numberOfTabsToShow);
     // Calculate max height for scrolling when tabs exceed the limit
-    const maxPopupHeight = numberOfTabsToShow * tabHeight + 12; // 12px for padding (6px top + 6px bottom)
+    const maxPopupHeight = (numberOfTabsToShow + 1) * tabHeight + 16; // Includes the new-tab button, its 4px margin, and 12px card padding.
     const popupBorderRadius = 12;
     const tabHorizontalPadding = 12;
     const tabTextPadding = 12;
@@ -250,6 +260,11 @@ export function Popup({ element }: IProps) {
 
   function switchTo(selectedTab: ITab) {
     chrome.runtime.sendMessage(switchTab(selectedTab));
+    closePopup();
+  }
+
+  function openNewTab() {
+    chrome.runtime.sendMessage(createTab());
     closePopup();
   }
 
@@ -329,7 +344,13 @@ export function Popup({ element }: IProps) {
       ArrowDown: () => selectNextTab(1),
       Tab: () => selectNextTab(event.shiftKey ? -1 : 1),
     };
-    const handler = handlers[event.key];
+    const isPlainSpace =
+      event.key === " " &&
+      !event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.shiftKey;
+    const handler = handlers[isPlainSpace ? "Enter" : event.key];
     if (handler) {
       handler();
       event.preventDefault();

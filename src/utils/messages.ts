@@ -17,6 +17,7 @@ export enum Message {
   SWITCH_TAB = "SWITCH_TAB",
   TogglePinTab = "TogglePinTab",
   CloseTab = "CloseTab",
+  CreateTab = "CreateTab",
 }
 
 export function demoSettings() {
@@ -66,6 +67,10 @@ export function closeTab(tabId: number) {
   return { type: Message.CloseTab, tabId } as const;
 }
 
+export function createTab() {
+  return { type: Message.CreateTab } as const;
+}
+
 interface IMessageTypeToObjectMap {
   [Message.CLOSE_POPUP]: ReturnType<typeof closePopup>;
   [Message.ContentScriptStarted]: ReturnType<typeof contentScriptStarted>;
@@ -78,6 +83,7 @@ interface IMessageTypeToObjectMap {
   [Message.SWITCH_TAB]: ReturnType<typeof switchTab>;
   [Message.TogglePinTab]: ReturnType<typeof togglePinTab>;
   [Message.CloseTab]: ReturnType<typeof closeTab>;
+  [Message.CreateTab]: ReturnType<typeof createTab>;
 }
 
 export type IMessage = IMessageTypeToObjectMap[keyof IMessageTypeToObjectMap];
