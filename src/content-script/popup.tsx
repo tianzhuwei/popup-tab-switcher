@@ -302,11 +302,11 @@ export function Popup({ element }: IProps) {
       fixUnfocusedDocumentInPdfFiles();
 
     return () => {
-      element.removeEventListener("click", onOverlayClick);
-      window.removeEventListener("keyup", onKeyUp);
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("blur", onWindowBlur);
-      window.removeEventListener("resize", onWindowResize);
+      element.removeEventListener("click", onOverlayClick, { capture: true });
+      window.removeEventListener("keyup", onKeyUp, { capture: true });
+      window.removeEventListener("keydown", onKeyDown, { capture: true });
+      window.removeEventListener("blur", onWindowBlur, { capture: true });
+      window.removeEventListener("resize", onWindowResize, { capture: true });
       if (cardElement) {
         cardElement.removeEventListener("mouseenter", onMouseEnterCard);
         cardElement.removeEventListener("mouseleave", onMouseLeaveCard);
