@@ -1,5 +1,5 @@
 import { For, render, Show } from "solid-js/web";
-import { createEffect, onCleanup, onMount } from "solid-js";
+import { createEffect, createSignal, on, onCleanup, onMount } from "solid-js";
 import styles from "./popup.scss";
 import {
   contentScriptStarted,
@@ -38,6 +38,17 @@ export function Popup({ element }: IProps) {
   let isSettingsDemo = false;
   // Resolves the effective theme (auto follows the OS, or a manual choice).
   const isDark = createThemeMode(() => store.settings.themeMode);
+  const [isVisible, setIsVisible] = createSignal(false);
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const [isReducedMotion, setIsReducedMotion] = createSignal(
+    reducedMotion.matches
+  );
+  const isMotionEnabled = () =>
+    store.settings.isVisualEffectsEnabled && !isReducedMotion();
+  let popupAnimation: Animation | undefined;
+  let popupTransition = 0;
+  let closeWithoutAnimation = false;
+  let isDisposed = false;
   // Stores the last active element before the popup was opened.
   const selectionAndFocus = new SelectionAndFocus();
   let cleanUpListeners = () => {};
@@ -50,6 +61,9 @@ export function Popup({ element }: IProps) {
   let prevTabRects: Map<number, DOMRect> | null = null;
 
   function snapshotTabPositions() {
+    if (!isMotionEnabled()) {
+      return;
+    }
     const tabElements = element.shadowRoot?.querySelectorAll(".tab");
     const nextMap = new Map<number, DOMRect>();
     tabElements?.forEach((el) => {
@@ -64,13 +78,20 @@ export function Popup({ element }: IProps) {
   onMount(() => {
     log(`[start switcher]`);
     cleanUpListeners = setUpListeners();
+    reducedMotion.addEventListener("change", onMotionPreferenceChange);
     chrome.runtime.sendMessage(contentScriptStarted());
   });
 
   onCleanup(() => {
     log(`[stop switcher]`);
+    isDisposed = true;
+    popupTransition += 1;
+    cancelPopupAnimation();
+    cancelRowAnimations();
+    reducedMotion.removeEventListener("change", onMotionPreferenceChange);
     cleanUpListeners();
     clearMouseIdleTimeout();
+    selectionAndFocus.apply();
     chrome.runtime.sendMessage(contentScriptStopped());
   });
 
@@ -80,7 +101,7 @@ export function Popup({ element }: IProps) {
       return;
     }
     const cardElement = element.shadowRoot?.querySelector(".card");
-    if (!cardElement) {
+    if (!cardElement || !isMotionEnabled()) {
       prevTabRects = null;
       return;
     }
@@ -100,13 +121,14 @@ export function Popup({ element }: IProps) {
       if (deltaY === 0) {
         return;
       }
+      tabEl.getAnimations().forEach((animation) => animation.cancel());
       tabEl.animate(
         [
           { transform: `translateY(${deltaY}px)` },
           { transform: "translateY(0)" },
         ],
         {
-          duration: 250,
+          duration: 180,
           easing: "ease-out",
         }
       );
@@ -114,73 +136,106 @@ export function Popup({ element }: IProps) {
     prevTabRects = null;
   });
 
+  createEffect(on(() => store.isOpen, updateOverlayVisibility));
+
   createEffect(() => {
-    log(`[render switcher]`);
     if (store.isOpen) {
-      selectionAndFocus.saveState();
-      showOverlay();
-    } else {
-      element.style.display = "none";
-      selectionAndFocus.apply();
-      isMouseOverCard = false;
-      clearMouseIdleTimeout();
+      updateOverlayAppearance();
     }
   });
+
+  createEffect(
+    on(isMotionEnabled, (enabled) => {
+      if (!enabled) {
+        cancelPopupAnimation();
+        cancelRowAnimations();
+        if (!store.isOpen) {
+          hideOverlay();
+        }
+      }
+    })
+  );
 
   return (
     <>
       <style>{styles}</style>
-      <Show when={store.isOpen}>
-        <div class="overlay">
+      <Show when={isVisible()}>
+        <div
+          class="overlay"
+          style={{ "pointer-events": store.isOpen ? "auto" : "none" }}
+        >
           <div
             class="card"
-            classList={{ card_dark: isDark() }}
+            classList={{
+              card_dark: isDark(),
+              card_enhanced: store.settings.isVisualEffectsEnabled,
+            }}
             data-test="card"
             onMouseEnter={onMouseEnterCard}
             onMouseLeave={onMouseLeaveCard}
             onMouseMove={onMouseMoveOnCard}
           >
-            <For each={store.tabs}>
-              {(tab, index) => (
-                <PopupTab
-                  tab={tab}
-                  isFirst={index() === 0}
-                  isLast={index() === store.tabs.length - 1}
-                  isSelected={index() === store.selectedTabIndex}
-                  isPinned={isPinned(tab.id!)}
-                  onTogglePin={() => {
-                    suppressAutoClose();
-                    snapshotTabPositions();
-                    togglePin(tab.id!);
-                  }}
-                  onHover={() => {
-                    if (store.settings.isHoverSelectingTab) {
-                      selectTabIndex(index());
-                    }
-                  }}
-                  onClose={() => {
-                    if (tab.id !== undefined) {
+            <div class="card__tabs">
+              <For each={store.tabs}>
+                {(tab, index) => (
+                  <PopupTab
+                    tab={tab}
+                    isFirst={index() === 0}
+                    isLast={index() === store.tabs.length - 1}
+                    isSelected={index() === store.selectedTabIndex}
+                    isActive={store.isOpen}
+                    isReducedMotion={isReducedMotion()}
+                    isPinned={isPinned(tab.id!)}
+                    onTogglePin={() => {
                       suppressAutoClose();
-                      removeTab(tab.id);
-                    }
-                  }}
-                  onClick={() => {
-                    switchTo(tab);
-                  }}
-                  textScrollSpeed={store.settings.textScrollSpeed}
-                  textScrollDelay={store.settings.textScrollDelay}
-                />
-              )}
-            </For>
-            <button
-              type="button"
-              class="card__newTabButton"
-              title="New tab"
-              aria-label="New tab"
-              onClick={openNewTab}
-            >
-              +
-            </button>
+                      snapshotTabPositions();
+                      togglePin(tab.id!);
+                    }}
+                    onHover={() => {
+                      if (store.settings.isHoverSelectingTab) {
+                        selectTabIndex(index());
+                      }
+                    }}
+                    onClose={() => {
+                      if (tab.id !== undefined) {
+                        suppressAutoClose();
+                        removeTab(tab.id);
+                      }
+                    }}
+                    onClick={() => {
+                      switchTo(tab);
+                    }}
+                    textScrollSpeed={store.settings.textScrollSpeed}
+                    textScrollDelay={store.settings.textScrollDelay}
+                  />
+                )}
+              </For>
+            </div>
+            <div class="card__footer">
+              <button
+                type="button"
+                class="card__newTabButton"
+                title="New tab"
+                aria-label="New tab"
+                onClick={openNewTab}
+              >
+                <svg
+                  class="card__newTabIcon"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M8 3V13M3 8H13"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </Show>
@@ -212,14 +267,27 @@ export function Popup({ element }: IProps) {
     const { fontSize, numberOfTabsToShow, tabHeight, popupWidth, iconSize } =
       store.settings;
     const zoomFactor = store.zoomFactor;
-    // Dynamic height: adapts to actual tab count, but capped at numberOfTabsToShow
-    const actualTabCount = store.tabs.length;
-    const displayTabCount = Math.min(actualTabCount, numberOfTabsToShow);
-    // Calculate max height for scrolling when tabs exceed the limit
-    const maxPopupHeight = (numberOfTabsToShow + 1) * tabHeight + 16; // Includes the new-tab button, its 4px margin, and 12px card padding.
-    const popupBorderRadius = 12;
+    const rowHeight = Math.max(
+      tabHeight,
+      46,
+      fontSize * 1.8 + 12,
+      iconSize + 16
+    );
+    const visibleTabCount =
+      numberOfTabsToShow > 0
+        ? numberOfTabsToShow
+        : Math.max(store.tabs.length, 1);
+    const footerHeight = 36;
+    const maxPopupHeight = visibleTabCount * rowHeight + footerHeight + 18;
+    const popupBorderRadius = 16;
     const tabHorizontalPadding = 12;
-    const tabTextPadding = 12;
+    const tabTextPadding = 0;
+    element.style.setProperty("--popup-unit", `${1 / zoomFactor}px`);
+    element.style.setProperty(
+      "--popup-footer-height",
+      `${footerHeight / zoomFactor}px`
+    );
+    element.style.setProperty("--popup-button-size", `${26 / zoomFactor}px`);
     element.style.setProperty("--popup-width", `${popupWidth / zoomFactor}px`);
     element.style.setProperty(
       "--popup-max-height",
@@ -229,7 +297,7 @@ export function Popup({ element }: IProps) {
       "--popup-border-radius",
       `${popupBorderRadius / zoomFactor}px`
     );
-    element.style.setProperty("--tab-height", `${tabHeight / zoomFactor}px`);
+    element.style.setProperty("--tab-height", `${rowHeight / zoomFactor}px`);
     element.style.setProperty(
       "--tab-horizontal-padding",
       `${tabHorizontalPadding / zoomFactor}px`
@@ -244,11 +312,120 @@ export function Popup({ element }: IProps) {
 
   function showOverlay() {
     element.style.display = "block";
+    element.style.pointerEvents = "auto";
+    updateOverlayAppearance();
+  }
+
+  function updateOverlayAppearance() {
     element.style.setProperty(
       "--popup-opacity",
       `${store.settings.opacity / 100}`
     );
     setStylePropertiesThatDependOnPageZoom();
+  }
+
+  function updateOverlayVisibility(isOpen: boolean) {
+    const transition = ++popupTransition;
+    if (isOpen) {
+      selectionAndFocus.saveState();
+      cancelPopupAnimation();
+      closeWithoutAnimation = false;
+      showOverlay();
+      setIsVisible(true);
+      // Wait for the card to mount, without replaying entrance on selection changes.
+      queueMicrotask(() => {
+        if (
+          isDisposed ||
+          transition !== popupTransition ||
+          !store.isOpen ||
+          !isMotionEnabled()
+        ) {
+          return;
+        }
+        const cardElement =
+          element.shadowRoot?.querySelector<HTMLElement>(".card");
+        if (!cardElement) {
+          return;
+        }
+        const animation = cardElement.animate(
+          [
+            {
+              opacity: 0,
+              transform: `translateY(${5 / store.zoomFactor}px) scale(0.985)`,
+            },
+            { opacity: 1, transform: "translateY(0) scale(1)" },
+          ],
+          { duration: 170, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" }
+        );
+        popupAnimation = animation;
+        animation.onfinish = () => {
+          if (popupAnimation === animation) {
+            popupAnimation = undefined;
+          }
+        };
+      });
+      return;
+    }
+
+    // Release page interaction and focus as soon as dismissal starts.
+    element.style.pointerEvents = "none";
+    selectionAndFocus.apply();
+    isMouseOverCard = false;
+    clearMouseIdleTimeout();
+    cancelRowAnimations();
+    const cardElement = element.shadowRoot?.querySelector<HTMLElement>(".card");
+    const shouldAnimate = isMotionEnabled() && !closeWithoutAnimation;
+    closeWithoutAnimation = false;
+    if (cardElement && shouldAnimate) {
+      const currentStyle = window.getComputedStyle(cardElement);
+      const start = {
+        opacity: currentStyle.opacity,
+        transform: currentStyle.transform,
+      };
+      cancelPopupAnimation();
+      const animation = cardElement.animate(
+        [
+          start,
+          {
+            opacity: 0,
+            transform: `translateY(${3 / store.zoomFactor}px) scale(0.99)`,
+          },
+        ],
+        { duration: 100, easing: "ease-out", fill: "forwards" }
+      );
+      popupAnimation = animation;
+      animation.onfinish = () => {
+        if (!isDisposed && transition === popupTransition) {
+          hideOverlay();
+        }
+      };
+    } else {
+      hideOverlay();
+    }
+  }
+
+  function cancelPopupAnimation() {
+    if (popupAnimation) {
+      popupAnimation.onfinish = null;
+      popupAnimation.cancel();
+      popupAnimation = undefined;
+    }
+  }
+
+  function cancelRowAnimations() {
+    element.shadowRoot?.querySelectorAll(".tab").forEach((tabElement) => {
+      tabElement.getAnimations().forEach((animation) => animation.cancel());
+    });
+  }
+
+  function hideOverlay() {
+    cancelPopupAnimation();
+    setIsVisible(false);
+    element.style.display = "none";
+  }
+
+  function onMotionPreferenceChange(event: MediaQueryListEvent) {
+    setIsReducedMotion(event.matches);
   }
 
   async function onWindowResize() {
@@ -260,11 +437,13 @@ export function Popup({ element }: IProps) {
 
   function switchTo(selectedTab: ITab) {
     chrome.runtime.sendMessage(switchTab(selectedTab));
+    closeWithoutAnimation = true;
     closePopup();
   }
 
   function openNewTab() {
     chrome.runtime.sendMessage(createTab());
+    closeWithoutAnimation = true;
     closePopup();
   }
 

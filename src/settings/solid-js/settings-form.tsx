@@ -196,6 +196,26 @@ export function SettingsForm(props: IProps) {
 
       {/* Appearance (layout in px) */}
       <Section icon="straighten" title="Appearance">
+        <Row title="Adds frosted glass and short popup animations. Uses more graphics resources when the switcher is open.">
+          <label
+            for="isVisualEffectsEnabled"
+            class={styles.settings__label}
+            title="Frosted glass and short animations. Uses more graphics resources while open."
+          >
+            <i class={styles.iconInLabel}>auto_awesome</i>
+            Visual effects
+          </label>
+          <MSwitch
+            id="isVisualEffectsEnabled"
+            isOn={props.store.settings.isVisualEffectsEnabled}
+            onToggle={() => {
+              props.setSettingsOptions({
+                isVisualEffectsEnabled:
+                  !props.store.settings.isVisualEffectsEnabled,
+              });
+            }}
+          />
+        </Row>
         <Row title="Sets the popup width">
           <label for="popupWidth" class={styles.settings__label}>
             <i class={styles.iconInLabel}>border_horizontal</i>

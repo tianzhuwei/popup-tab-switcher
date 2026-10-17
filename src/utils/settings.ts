@@ -7,6 +7,7 @@ export interface ISettings {
   textScrollSpeed: number;
   numberOfTabsToShow: number;
   themeMode: ThemeMode;
+  isVisualEffectsEnabled: boolean;
   popupWidth: number;
   tabHeight: number;
   fontSize: number;
@@ -23,6 +24,7 @@ export const defaultSettings: ISettings = {
   textScrollSpeed: 1,
   numberOfTabsToShow: 7,
   themeMode: "auto",
+  isVisualEffectsEnabled: false,
   popupWidth: 420,
   tabHeight: 40,
   fontSize: 16,
@@ -77,6 +79,7 @@ export async function getSettings(
         textScrollSpeed: this.textScrollSpeed,
         numberOfTabsToShow: this.numberOfTabsToShow,
         themeMode: this.themeMode,
+        isVisualEffectsEnabled: this.isVisualEffectsEnabled,
         popupWidth: this.popupWidth,
         tabHeight: this.tabHeight,
         fontSize: this.fontSize,

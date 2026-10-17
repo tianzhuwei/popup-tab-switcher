@@ -1,8 +1,10 @@
-import { createEffect } from "solid-js";
+import { createEffect, createMemo, onCleanup } from "solid-js";
 import { TabIcon, PinIcon, CloseIcon } from "./icons";
 
 interface IProps {
   isSelected: boolean;
+  isActive: boolean;
+  isReducedMotion: boolean;
   isLast: boolean;
   isFirst: boolean;
   isPinned: boolean;
@@ -19,17 +21,24 @@ export function PopupTab(props: IProps) {
   let tabElement: HTMLDivElement;
   let tabTextElement: HTMLDivElement;
   let tabTextContentElement: HTMLElement;
+  const domain = createMemo(() =>
+    getTabDomain(props.tab.url || props.tab.pendingUrl)
+  );
 
   createEffect(() => {
-    if (props.isSelected) {
-      scrollLongTextOfSelectedTab();
+    const isSelected = props.isSelected;
+    const isActive = props.isActive;
+    const isReducedMotion = props.isReducedMotion;
+    cancelTextAnimation();
+    if (isSelected && isActive) {
+      if (!isReducedMotion) {
+        scrollLongTextOfSelectedTab();
+      }
       tabElement.focus();
-    } else {
-      tabTextContentElement
-        .getAnimations()
-        .forEach((animation) => animation.cancel());
     }
   });
+
+  onCleanup(cancelTextAnimation);
 
   function handlePinClick(e: MouseEvent) {
     e.stopPropagation();
@@ -57,6 +66,7 @@ export function PopupTab(props: IProps) {
       onMouseMove={props.onHover}
     >
       <button
+        type="button"
         class="tab__closeButton"
         onClick={handleCloseClick}
         title="Close tab"
@@ -64,12 +74,18 @@ export function PopupTab(props: IProps) {
         <CloseIcon />
       </button>
       <TabIcon url={props.tab.url} title={props.tab.title} />
-      <div ref={tabTextElement!} class="tab__text">
-        <span class="tab__textContent" ref={tabTextContentElement!}>
-          {props.tab.title}
-        </span>
+      <div class="tab__details">
+        <div ref={tabTextElement!} class="tab__text">
+          <span class="tab__textContent" ref={tabTextContentElement!}>
+            {props.tab.title}
+          </span>
+        </div>
+        <div class="tab__domain" title={domain()}>
+          {domain()}
+        </div>
       </div>
       <button
+        type="button"
         class="tab__pinButton"
         classList={{
           tab__pinButton_pinned: props.isPinned,
@@ -82,15 +98,18 @@ export function PopupTab(props: IProps) {
     </div>
   );
 
+  function cancelTextAnimation() {
+    tabTextContentElement
+      .getAnimations()
+      .forEach((animation) => animation.cancel());
+  }
+
   function scrollLongTextOfSelectedTab() {
-    const horizontalPadding = 10;
-    const fullTextWidthWithoutOnePadding =
-      tabTextContentElement.scrollWidth - horizontalPadding;
     const textOverflow =
-      fullTextWidthWithoutOnePadding - tabTextElement.clientWidth;
+      tabTextContentElement.scrollWidth - tabTextElement.clientWidth;
     const pixelsPerSecond = 90 * props.textScrollSpeed;
-    if (textOverflow > 0) {
-      const hiddenTextWidthWithPadding = textOverflow + horizontalPadding;
+    if (textOverflow > 0 && pixelsPerSecond > 0) {
+      const hiddenTextWidthWithPadding = textOverflow;
       const scrollTimeMs =
         (hiddenTextWidthWithPadding / pixelsPerSecond) * 1000;
       const durationMs = scrollTimeMs + 2 * props.textScrollDelay;
@@ -122,5 +141,28 @@ export function PopupTab(props: IProps) {
         }
       );
     }
+  }
+}
+
+function getTabDomain(url?: string): string {
+  if (!url) {
+    return "";
+  }
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.hostname.replace(/^www\./, "");
+    }
+    if (parsed.protocol === "file:") {
+      return "Local file";
+    }
+    if (parsed.protocol === "chrome-extension:") {
+      return "Extension";
+    }
+    return parsed.host
+      ? `${parsed.protocol}//${parsed.host}`
+      : parsed.protocol.replace(/:$/, "");
+  } catch {
+    return "";
   }
 }

@@ -29,7 +29,7 @@ export function createPopupStore() {
 
   const closePopup = () => {
     setStore("isOpen", false);
-    setStore("selectedTabIndex", 0);
+    // Keep the highlight stable during dismissal; the next sync resets selection.
   };
 
   const openPopup = () => {

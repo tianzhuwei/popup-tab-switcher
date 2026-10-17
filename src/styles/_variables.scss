@@ -39,34 +39,65 @@ $color-blue-dodger: #448aff;
 $color-blue-mariner: #1a73e8;
 $color-blue-mariner-light: #4285f4;
 
-// light theme - Modern glassmorphism style
+// Popup surfaces share the same layout with optional glass effects.
 @mixin popup-theme-light() {
-  --card-color: #{$color-gray-800};
-  --card-background-color: rgba(255, 255, 255, 0.92);
-  --card-border-color: rgba(0, 0, 0, 0.08);
-  --tab_selected-background: #{$color-white};
-  --tab_selected-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  --tab_selected-glow: 0 0 0 1px rgba(26, 115, 232, 0.16),
-    0 0 18px rgba(26, 115, 232, 0.18);
-  --tab_hover-background: #{$color-gray-50};
-  --tab_accent-color: #{$color-blue-primary};
-  --tab__icon_noFavIcon-fill: #{$color-gray-500};
-  --scrollbar-thumb: #{$color-gray-300};
-  --scrollbar-track: transparent;
+  --card-color: #1d2944;
+  --card-background-color: #f3f6fc;
+  --card-glass-background-color: rgba(240, 245, 255, 0.78);
+  --card-border-color: rgba(255, 255, 255, 0.88);
+  --card-blue-reflection: rgba(148, 196, 255, 0.16);
+  --card-violet-reflection: rgba(171, 151, 255, 0.17);
+  --card-shadow: 0 18px 54px rgba(34, 49, 90, 0.2),
+    0 3px 12px rgba(34, 49, 90, 0.08);
+  --card-glass-highlight: inset 0 0 0 1px rgba(255, 255, 255, 0.38),
+    0 0 22px rgba(159, 188, 255, 0.12);
+  --card-divider-color: rgba(106, 124, 168, 0.15);
+  --card-button-background: rgba(255, 255, 255, 0.48);
+  --card-button-hover-background: rgba(255, 255, 255, 0.82);
+  --card-button-border-color: rgba(255, 255, 255, 0.92);
+  --tab_selected-background: linear-gradient(
+    105deg,
+    #197bff 0%,
+    #4166ff 62%,
+    #9472fa 100%
+  );
+  --tab_selected-glow: inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 2px 9px rgba(78, 103, 238, 0.17);
+  --tab_hover-background: rgba(255, 255, 255, 0.48);
+  --tab-secondary-color: #7382a4;
+  --tab_accent-color: #2278f6;
+  --tab__icon_noFavIcon-fill: #7d8aaf;
+  --tab-button-hover-background: rgba(94, 115, 161, 0.1);
+  --scrollbar-thumb: rgba(111, 131, 176, 0.3);
 }
 
-// dark theme - Modern dark mode
 @mixin popup-theme-dark() {
-  --card-color: #{$color-dark-text};
-  --card-background-color: rgba(26, 26, 26, 0.95);
-  --card-border-color: #{$color-dark-border};
-  --tab_selected-background: #{$color-dark-surface-active};
-  --tab_selected-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --tab_selected-glow: 0 0 0 1px rgba(138, 180, 248, 0.24),
-    0 0 20px rgba(138, 180, 248, 0.22);
-  --tab_hover-background: #{$color-dark-surface-hover};
-  --tab_accent-color: #{$color-blue-lighter};
-  --tab__icon_noFavIcon-fill: #{$color-dark-text-secondary};
-  --scrollbar-thumb: #{$color-gray-600};
-  --scrollbar-track: transparent;
+  --card-color: #e7ecfa;
+  --card-background-color: #1c2334;
+  --card-glass-background-color: rgba(24, 31, 47, 0.82);
+  --card-border-color: rgba(176, 195, 240, 0.2);
+  --card-blue-reflection: rgba(79, 134, 232, 0.12);
+  --card-violet-reflection: rgba(136, 100, 218, 0.13);
+  --card-shadow: 0 18px 54px rgba(3, 7, 18, 0.46),
+    0 3px 12px rgba(3, 7, 18, 0.2);
+  --card-glass-highlight: inset 0 0 0 1px rgba(201, 215, 255, 0.06),
+    0 0 24px rgba(95, 124, 233, 0.1);
+  --card-divider-color: rgba(154, 174, 219, 0.14);
+  --card-button-background: rgba(162, 184, 242, 0.08);
+  --card-button-hover-background: rgba(162, 184, 242, 0.17);
+  --card-button-border-color: rgba(185, 204, 255, 0.2);
+  --tab_selected-background: linear-gradient(
+    105deg,
+    #1768e8 0%,
+    #4b5fe5 62%,
+    #8563dd 100%
+  );
+  --tab_selected-glow: inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 2px 9px rgba(49, 61, 167, 0.25);
+  --tab_hover-background: rgba(167, 190, 248, 0.08);
+  --tab-secondary-color: #98a6c7;
+  --tab_accent-color: #8eb8ff;
+  --tab__icon_noFavIcon-fill: #9aa9ce;
+  --tab-button-hover-background: rgba(174, 195, 249, 0.12);
+  --scrollbar-thumb: rgba(151, 172, 219, 0.3);
 }
