@@ -19,6 +19,7 @@ const conf = {
   entry: {
     background: "./src/background.ts",
     content: "./src/content-script/index.ts",
+    "blank-close": "./src/content-script/blank-close.ts",
     settings: {
       import: "./src/settings/index.ts",
       filename: "settings/index.js",

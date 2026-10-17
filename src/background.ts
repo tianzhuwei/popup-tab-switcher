@@ -13,6 +13,7 @@ import { checkTab, ITab } from "./utils/check-tab";
 import { log } from "./utils/logger";
 import { ServiceFactory } from "./service-factory";
 import { getActiveTab } from "./background/get-active-tab";
+import { initBlankCloseGesture } from "./background/blank-close";
 
 type ChromeTab = chrome.tabs.Tab;
 type IPort = chrome.runtime.Port;
@@ -35,6 +36,7 @@ if (DEVELOPMENT) {
 }
 
 initListeners();
+initBlankCloseGesture();
 
 function initListeners() {
   /** NOTE:
@@ -273,10 +275,63 @@ function messageHandlers(): Partial<IHandlers> {
       registry.togglePin(tabId);
     },
     [Message.CloseTab]: async ({ tabId }) => {
-      await ServiceFactory.getTabRegistry();
-      suppressAutoSwitchTabIds.add(tabId);
-      await chrome.tabs.remove(tabId);
-      ServiceFactory.cancelPinRecovery(tabId, true);
+      await closeRegistryTab(tabId);
+    },
+    [Message.CloseTabFromBlankDoubleClick]: async ({ timestamp }, sender) => {
+      try {
+        const tabId = sender.tab?.id;
+        if (
+          sender.id !== chrome.runtime.id ||
+          sender.frameId !== 0 ||
+          tabId === undefined ||
+          !sender.url ||
+          !/^https?:\/\//.test(sender.url) ||
+          !Number.isFinite(timestamp)
+        ) {
+          return false;
+        }
+        const settings = await ServiceFactory.getSettings();
+        if (
+          !settings.isDoubleClickClosingTab ||
+          !(await chrome.permissions.contains({
+            origins: ["http://*/*", "https://*/*"],
+          }))
+        ) {
+          return false;
+        }
+        await ServiceFactory.getTabRegistry();
+        const tab = await chrome.tabs.get(tabId);
+        if (
+          !tab.active ||
+          tab.url !== sender.url ||
+          (tab.pendingUrl && tab.pendingUrl !== sender.url)
+        ) {
+          return false;
+        }
+        // Check the originating document, including same-URL reloads, rather
+        // than allowing a late gesture to close its replacement document.
+        const [page] = await chrome.scripting.executeScript({
+          target: {
+            tabId,
+            ...(sender.documentId ? { documentIds: [sender.documentId] } : {}),
+          },
+          func: () => document.hasFocus() && !document.hidden,
+        });
+        const currentSettings = await ServiceFactory.getSettings();
+        if (
+          page?.result !== true ||
+          !currentSettings.isDoubleClickClosingTab ||
+          Date.now() - timestamp > 1500 ||
+          timestamp > Date.now()
+        ) {
+          return false;
+        }
+        await closeRegistryTab(tabId);
+        return true;
+      } catch (error) {
+        log("[Blank double-click close skipped]", error);
+        return false;
+      }
     },
     [Message.CreateTab]: async (_m, sender) => {
       await chrome.tabs.create({ windowId: sender.tab?.windowId });
@@ -296,6 +351,18 @@ function messageHandlers(): Partial<IHandlers> {
       return currentSettings.getSettingsObject();
     },
   };
+}
+
+async function closeRegistryTab(tabId: number): Promise<void> {
+  await ServiceFactory.getTabRegistry();
+  suppressAutoSwitchTabIds.add(tabId);
+  try {
+    await chrome.tabs.remove(tabId);
+    ServiceFactory.cancelPinRecovery(tabId, true);
+  } catch (error) {
+    suppressAutoSwitchTabIds.delete(tabId);
+    throw error;
+  }
 }
 
 async function initializeContentScript(tab: ITab): Promise<boolean> {
