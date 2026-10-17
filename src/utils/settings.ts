@@ -16,7 +16,6 @@ export interface ISettings {
   isSwitchingToPreviouslyUsedTab: boolean;
   isStayingOpen: boolean;
   isHoverSelectingTab: boolean;
-  isDoubleClickClosingTab: boolean;
   isShowingTabsFromAllWindows: boolean;
 }
 
@@ -34,7 +33,6 @@ export const defaultSettings: ISettings = {
   isSwitchingToPreviouslyUsedTab: true,
   isStayingOpen: false,
   isHoverSelectingTab: false,
-  isDoubleClickClosingTab: false,
   isShowingTabsFromAllWindows: true,
 };
 
@@ -90,7 +88,6 @@ export async function getSettings(
         isSwitchingToPreviouslyUsedTab: this.isSwitchingToPreviouslyUsedTab,
         isStayingOpen: this.isStayingOpen,
         isHoverSelectingTab: this.isHoverSelectingTab,
-        isDoubleClickClosingTab: this.isDoubleClickClosingTab,
         isShowingTabsFromAllWindows: this.isShowingTabsFromAllWindows,
       };
     },

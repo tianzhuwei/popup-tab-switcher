@@ -16,7 +16,6 @@ export enum Message {
   SWITCH_TAB = "SWITCH_TAB",
   TogglePinTab = "TogglePinTab",
   CloseTab = "CloseTab",
-  CloseTabFromBlankDoubleClick = "CloseTabFromBlankDoubleClick",
   CreateTab = "CreateTab",
 }
 
@@ -67,13 +66,6 @@ export function closeTab(tabId: number) {
   return { type: Message.CloseTab, tabId } as const;
 }
 
-export function closeTabFromBlankDoubleClick() {
-  return {
-    type: Message.CloseTabFromBlankDoubleClick,
-    timestamp: Date.now(),
-  } as const;
-}
-
 export function createTab() {
   return { type: Message.CreateTab } as const;
 }
@@ -90,9 +82,6 @@ interface IMessageTypeToObjectMap {
   [Message.SWITCH_TAB]: ReturnType<typeof switchTab>;
   [Message.TogglePinTab]: ReturnType<typeof togglePinTab>;
   [Message.CloseTab]: ReturnType<typeof closeTab>;
-  [Message.CloseTabFromBlankDoubleClick]: ReturnType<
-    typeof closeTabFromBlankDoubleClick
-  >;
   [Message.CreateTab]: ReturnType<typeof createTab>;
 }
 
@@ -112,8 +101,6 @@ export type IMessageResponse<Message extends IMessage> =
     ? IGetModelResponse
     : Message extends ReturnType<typeof getSettings>
     ? ISettings
-    : Message extends ReturnType<typeof closeTabFromBlankDoubleClick>
-    ? boolean
     : void;
 
 export type IHandlers = {

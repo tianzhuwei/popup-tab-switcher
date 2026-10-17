@@ -13,11 +13,11 @@ import { checkTab, ITab } from "./utils/check-tab";
 import { log } from "./utils/logger";
 import { ServiceFactory } from "./service-factory";
 import { getActiveTab } from "./background/get-active-tab";
-import { initBlankCloseGesture } from "./background/blank-close";
 
 type ChromeTab = chrome.tabs.Tab;
 type IPort = chrome.runtime.Port;
 const suppressAutoSwitchTabIds = new Set<number>();
+const CLOSE_TAB_MENU_ID = "close-current-tab";
 
 // NOTE: This is somehow related to the test "focuses previously active window on a tab closing".
 // TODO: Describe the problem in more details.
@@ -36,7 +36,6 @@ if (DEVELOPMENT) {
 }
 
 initListeners();
-initBlankCloseGesture();
 
 function initListeners() {
   /** NOTE:
@@ -67,8 +66,60 @@ function initListeners() {
   chrome.runtime.onConnect.addListener(handleConnection);
   chrome.commands.onCommand.addListener(handleCommand);
   chrome.runtime.onMessage.addListener(handleMessage(messageHandlers()));
+  chrome.runtime.onInstalled.addListener(() => {
+    installCloseTabMenu();
+    removeLegacyBlankCloseGesture().catch((error) =>
+      log("[Legacy gesture cleanup failed]", error)
+    );
+  });
+  chrome.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === CLOSE_TAB_MENU_ID && tab?.id !== undefined) {
+      closeRegistryTab(tab.id).catch((error) =>
+        log("[Context menu close failed]", error)
+      );
+    }
+  });
   // Clear the legacy redirect for installations that registered it previously.
   chrome.runtime.setUninstallURL("");
+}
+
+function installCloseTabMenu(): void {
+  chrome.contextMenus.remove(CLOSE_TAB_MENU_ID, () => {
+    // A fresh installation has no previous item to remove.
+    void chrome.runtime.lastError;
+    chrome.contextMenus.create(
+      {
+        id: CLOSE_TAB_MENU_ID,
+        title: "关闭标签页",
+        contexts: ["all"],
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          log("[Context menu registration failed]", chrome.runtime.lastError);
+        }
+      }
+    );
+  });
+}
+
+async function removeLegacyBlankCloseGesture(): Promise<void> {
+  const scripts = await chrome.scripting.getRegisteredContentScripts({
+    ids: ["blank-double-click-close"],
+  });
+  if (scripts.length) {
+    await chrome.scripting.unregisterContentScripts({
+      ids: ["blank-double-click-close"],
+    });
+  }
+  const settings = await ServiceFactory.getSettings();
+  const legacy = settings as typeof settings & {
+    isDoubleClickClosingTab?: boolean;
+  };
+  if (Object.prototype.hasOwnProperty.call(legacy, "isDoubleClickClosingTab")) {
+    delete legacy.isDoubleClickClosingTab;
+    // Also turns off any old injected listener still observing this setting.
+    await settings.update({});
+  }
 }
 
 async function switchToPreviousTab() {
@@ -276,62 +327,6 @@ function messageHandlers(): Partial<IHandlers> {
     },
     [Message.CloseTab]: async ({ tabId }) => {
       await closeRegistryTab(tabId);
-    },
-    [Message.CloseTabFromBlankDoubleClick]: async ({ timestamp }, sender) => {
-      try {
-        const tabId = sender.tab?.id;
-        if (
-          sender.id !== chrome.runtime.id ||
-          sender.frameId !== 0 ||
-          tabId === undefined ||
-          !sender.url ||
-          !/^https?:\/\//.test(sender.url) ||
-          !Number.isFinite(timestamp)
-        ) {
-          return false;
-        }
-        const settings = await ServiceFactory.getSettings();
-        if (
-          !settings.isDoubleClickClosingTab ||
-          !(await chrome.permissions.contains({
-            origins: ["http://*/*", "https://*/*"],
-          }))
-        ) {
-          return false;
-        }
-        await ServiceFactory.getTabRegistry();
-        const tab = await chrome.tabs.get(tabId);
-        if (
-          !tab.active ||
-          tab.url !== sender.url ||
-          (tab.pendingUrl && tab.pendingUrl !== sender.url)
-        ) {
-          return false;
-        }
-        // Check the originating document, including same-URL reloads, rather
-        // than allowing a late gesture to close its replacement document.
-        const [page] = await chrome.scripting.executeScript({
-          target: {
-            tabId,
-            ...(sender.documentId ? { documentIds: [sender.documentId] } : {}),
-          },
-          func: () => document.hasFocus() && !document.hidden,
-        });
-        const currentSettings = await ServiceFactory.getSettings();
-        if (
-          page?.result !== true ||
-          !currentSettings.isDoubleClickClosingTab ||
-          Date.now() - timestamp > 1500 ||
-          timestamp > Date.now()
-        ) {
-          return false;
-        }
-        await closeRegistryTab(tabId);
-        return true;
-      } catch (error) {
-        log("[Blank double-click close skipped]", error);
-        return false;
-      }
     },
     [Message.CreateTab]: async (_m, sender) => {
       await chrome.tabs.create({ windowId: sender.tab?.windowId });

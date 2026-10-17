@@ -6,7 +6,6 @@ import styles from "./settings.module.scss";
 import { MSwitch } from "./components/m-switch";
 import { ISettings, ThemeMode } from "../../utils/settings";
 import { MNumberInput } from "./components/m-text-field/m-number-input";
-import { log } from "../../utils/logger";
 
 interface IProps {
   store: ISettingsStoreObject;
@@ -63,9 +62,6 @@ function Row(props: { children: any }) {
 }
 
 export function SettingsForm(props: IProps) {
-  const [isRequestingGesturePermission, setRequestingGesturePermission] =
-    createSignal(false);
-
   return (
     <form>
       <Show
@@ -144,48 +140,6 @@ export function SettingsForm(props: IProps) {
                 isSwitchingToPreviouslyUsedTab:
                   !props.store.settings.isSwitchingToPreviouslyUsedTab,
               });
-            }}
-          />
-        </Row>
-        <Row>
-          <label
-            for="isDoubleClickClosingTab"
-            class={styles.settings__label}
-            title="Double-click empty page space to close this tab. Text, links, controls, images, and editable areas are excluded."
-          >
-            <i class={styles.iconInLabel}>mouse</i>
-            Double-click blank space to close
-          </label>
-          <MSwitch
-            id="isDoubleClickClosingTab"
-            isOn={
-              !isRequestingGesturePermission() &&
-              props.store.settings.isDoubleClickClosingTab
-            }
-            onToggle={async () => {
-              if (isRequestingGesturePermission()) {
-                syncGestureSwitch();
-                return;
-              }
-              if (props.store.settings.isDoubleClickClosingTab) {
-                props.setSettingsOptions({ isDoubleClickClosingTab: false });
-                return;
-              }
-              setRequestingGesturePermission(true);
-              syncGestureSwitch();
-              try {
-                const granted = await chrome.permissions.request({
-                  origins: ["http://*/*", "https://*/*"],
-                });
-                if (granted) {
-                  props.setSettingsOptions({ isDoubleClickClosingTab: true });
-                }
-              } catch (error) {
-                log("Unable to request double-click gesture permission", error);
-              } finally {
-                setRequestingGesturePermission(false);
-                syncGestureSwitch();
-              }
             }}
           />
         </Row>
@@ -392,13 +346,4 @@ export function SettingsForm(props: IProps) {
       </Section>
     </form>
   );
-
-  function syncGestureSwitch() {
-    const input = document.getElementById("isDoubleClickClosingTab");
-    if (input instanceof HTMLInputElement) {
-      input.checked =
-        !isRequestingGesturePermission() &&
-        props.store.settings.isDoubleClickClosingTab;
-    }
-  }
 }
