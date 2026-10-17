@@ -19,6 +19,20 @@ const CONTAINERS = new Set([
   "ARTICLE",
   "ASIDE",
   "DIV",
+  "HEADER",
+  "FOOTER",
+  "NAV",
+  "P",
+  "BLOCKQUOTE",
+  "UL",
+  "OL",
+  "LI",
+  "DL",
+  "DT",
+  "DD",
+  "FIGURE",
+  "FIGCAPTION",
+  "SPAN",
 ]);
 const EXCLUDED = [
   "a",
@@ -34,8 +48,6 @@ const EXCLUDED = [
   "table",
   "pre",
   "code",
-  "p",
-  "blockquote",
   "img",
   "picture",
   "audio",
@@ -47,12 +59,7 @@ const EXCLUDED = [
   "object",
   "dialog",
   "[popover]",
-  "[tabindex]",
   "[draggable=true]",
-  "[onclick]",
-  "[ondblclick]",
-  "[onmousedown]",
-  "[onpointerdown]",
   "[aria-haspopup]",
   '[contenteditable]:not([contenteditable="false"])',
   ...[
@@ -87,6 +94,134 @@ const EXCLUDED = [
     "tooltip",
   ].map((role) => `[role="${role}"]`),
 ].join(",");
+const INLINE_HANDLERS = "[onclick],[ondblclick],[onmousedown],[onpointerdown]";
+
+function isProtected(element: HTMLElement): boolean {
+  if (
+    element.matches(EXCLUDED) ||
+    element.isContentEditable ||
+    element.shadowRoot ||
+    element.localName.includes("-")
+  ) {
+    return true;
+  }
+  // Page-wide focus/delegation hooks do not make every blank area a control.
+  const isPageRoot =
+    element === document.body || element === document.documentElement;
+  return (
+    !isPageRoot &&
+    (element.tabIndex >= 0 ||
+      element.matches(INLINE_HANDLERS) ||
+      !!(
+        element.onclick ||
+        element.ondblclick ||
+        element.onmousedown ||
+        element.onpointerdown
+      ))
+  );
+}
+
+function hasImage(style: CSSStyleDeclaration): boolean {
+  const mask =
+    style.getPropertyValue("mask-image") ||
+    style.getPropertyValue("-webkit-mask-image");
+  // Gradients are common page decoration, unlike image URLs or paint worklets.
+  return (
+    /\b(?:url|image-set|cross-fade|image|paint)\s*\(/i.test(
+      style.backgroundImage
+    ) || !!(mask && mask !== "none")
+  );
+}
+
+function hasPseudoContent(element: HTMLElement): boolean {
+  return ["::before", "::after"].some((pseudo) => {
+    const style = getComputedStyle(element, pseudo);
+    const content = style.content;
+    if (
+      style.display === "none" ||
+      style.visibility !== "visible" ||
+      Number(style.opacity) === 0 ||
+      ["none", "normal"].includes(content)
+    ) {
+      return false;
+    }
+    return (
+      !(content === "" || /^(["'])\s*\1$/.test(content)) || hasImage(style)
+    );
+  });
+}
+
+function containsPoint(
+  rect: DOMRect,
+  x: number,
+  y: number,
+  margin = 0
+): boolean {
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    x >= rect.left - margin &&
+    x <= rect.right + margin &&
+    y >= rect.top - margin &&
+    y <= rect.bottom + margin
+  );
+}
+
+function hasContentAtPoint(target: HTMLElement, x: number, y: number): boolean {
+  const pending: Element[] = [target];
+  const text = document.createRange();
+  let remaining = 256;
+  while (pending.length) {
+    const element = pending.pop()!;
+    const style = getComputedStyle(element);
+    if (style.display === "none" || Number(style.opacity) === 0) {
+      continue;
+    }
+    if (element !== target) {
+      if (
+        !Array.from(element.getClientRects()).some((rect) =>
+          containsPoint(rect, x, y)
+        )
+      ) {
+        continue;
+      }
+      if (
+        style.visibility === "visible" &&
+        (!(element instanceof HTMLElement) ||
+          !CONTAINERS.has(element.tagName) ||
+          isProtected(element) ||
+          hasImage(style) ||
+          hasPseudoContent(element) ||
+          !["auto", "default"].includes(style.cursor))
+      ) {
+        return true;
+      }
+    }
+    for (const child of Array.from(element.childNodes)) {
+      // Unknown/deep overlays remain excluded without walking an entire page.
+      if (--remaining < 0) {
+        return true;
+      }
+      if (
+        child.nodeType === Node.TEXT_NODE &&
+        child.textContent?.trim() &&
+        style.visibility === "visible"
+      ) {
+        text.selectNodeContents(child);
+        if (
+          Array.from(text.getClientRects()).some((rect) =>
+            containsPoint(rect, x, y, 4)
+          )
+        ) {
+          return true;
+        }
+      } else if (child instanceof Element) {
+        pending.push(child);
+      }
+    }
+  }
+  return false;
+}
 
 // Kept separate from content.js: no popup, framework, polling or page changes.
 if (
@@ -280,71 +415,37 @@ function initBlankClose(): void {
       if (!(node instanceof HTMLElement)) {
         continue;
       }
-      if (
-        node.matches(EXCLUDED) ||
-        node.isContentEditable ||
-        node.shadowRoot ||
-        node.localName.includes("-") ||
-        node.onclick ||
-        node.ondblclick ||
-        node.onmousedown ||
-        node.onpointerdown
-      ) {
+      if (isProtected(node)) {
         return;
       }
       const style = getComputedStyle(node);
-      const mask =
-        style.getPropertyValue("mask-image") ||
-        style.getPropertyValue("-webkit-mask-image");
-      if (
-        !["auto", "default"].includes(style.cursor) ||
-        style.userSelect === "none" ||
-        style.backgroundImage !== "none" ||
-        (mask && mask !== "none")
-      ) {
+      if (!["auto", "default"].includes(style.cursor) || hasImage(style)) {
         return;
       }
     }
-    for (const pseudo of ["::before", "::after"]) {
-      if (
-        !["none", "normal"].includes(getComputedStyle(target, pseudo).content)
-      ) {
-        return;
-      }
-    }
-    // Decorative children can ignore pointer events while still painting here.
+    // Inspect content at the point, not a transparent layout layer's whole box.
+    // Text rectangles also protect user-select:none text without relying on caret APIs.
     if (
-      Array.from(target.children).some((child) =>
-        Array.from(child.getClientRects()).some(
-          (rect) =>
-            event.clientX >= rect.left &&
-            event.clientX <= rect.right &&
-            event.clientY >= rect.top &&
-            event.clientY <= rect.bottom
-        )
-      )
+      hasPseudoContent(target) ||
+      hasContentAtPoint(target, event.clientX, event.clientY)
     ) {
       return;
     }
-    // Hit-test nearby characters too: unselectable/direct container text must
-    // never be mistaken for blank padding merely because its tag is a DIV.
+    // Keep the text hit-test for overflow/overlay text, but a missing caret
+    // no longer vetoes empty space already checked by DOM text rectangles.
     const caret = document.caretRangeFromPoint(event.clientX, event.clientY);
-    if (!caret) {
-      return;
-    }
-    const node = caret.startContainer;
-    const value = node.textContent || "";
-    if (node.nodeType === Node.TEXT_NODE && value.trim()) {
-      const text = document.createRange();
-      text.setStart(node, Math.max(0, caret.startOffset - 1));
-      text.setEnd(node, Math.min(value.length, caret.startOffset + 1));
+    const node = caret?.startContainer;
+    if (
+      caret &&
+      node?.nodeType === Node.TEXT_NODE &&
+      node.textContent?.trim()
+    ) {
+      const offset = caret.startOffset;
+      caret.setStart(node, Math.max(0, offset - 1));
+      caret.setEnd(node, Math.min((node.textContent || "").length, offset + 1));
       if (
-        Array.from(text.getClientRects()).some(
-          (rect) =>
-            event.clientX >= rect.left - 6 &&
-            event.clientX <= rect.right + 6 &&
-            event.clientY >= rect.top - 6 &&
-            event.clientY <= rect.bottom + 6
+        Array.from(caret.getClientRects()).some((rect) =>
+          containsPoint(rect, event.clientX, event.clientY, 4)
         )
       ) {
         return;
