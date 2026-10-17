@@ -180,8 +180,6 @@ export function Popup({ element }: IProps) {
                 {(tab, index) => (
                   <PopupTab
                     tab={tab}
-                    isFirst={index() === 0}
-                    isLast={index() === store.tabs.length - 1}
                     isSelected={index() === store.selectedTabIndex}
                     isActive={store.isOpen}
                     isReducedMotion={isReducedMotion()}
@@ -281,7 +279,6 @@ export function Popup({ element }: IProps) {
     const maxPopupHeight = visibleTabCount * rowHeight + footerHeight + 18;
     const popupBorderRadius = 16;
     const tabHorizontalPadding = 12;
-    const tabTextPadding = 0;
     element.style.setProperty("--popup-unit", `${1 / zoomFactor}px`);
     element.style.setProperty(
       "--popup-footer-height",
@@ -301,10 +298,6 @@ export function Popup({ element }: IProps) {
     element.style.setProperty(
       "--tab-horizontal-padding",
       `${tabHorizontalPadding / zoomFactor}px`
-    );
-    element.style.setProperty(
-      "--tab-text-padding",
-      `${tabTextPadding / zoomFactor}px`
     );
     element.style.setProperty("--font-size", `${fontSize / zoomFactor}px`);
     element.style.setProperty("--icon-size", `${iconSize / zoomFactor}px`);
@@ -468,19 +461,11 @@ export function Popup({ element }: IProps) {
   }
 
   function setUpListeners() {
-    const cardElement = element.shadowRoot?.querySelector(".card");
-
     element.addEventListener("click", onOverlayClick, { capture: true });
     window.addEventListener("keyup", onKeyUp, { capture: true });
     window.addEventListener("keydown", onKeyDown, { capture: true });
     window.addEventListener("blur", onWindowBlur, { capture: true });
     window.addEventListener("resize", onWindowResize, { capture: true });
-
-    if (cardElement) {
-      cardElement.addEventListener("mouseenter", onMouseEnterCard);
-      cardElement.addEventListener("mouseleave", onMouseLeaveCard);
-      cardElement.addEventListener("mousemove", onMouseMoveOnCard);
-    }
 
     const messageListener = handleMessage({
       [Message.DEMO_SETTINGS]: async () => {
@@ -518,11 +503,6 @@ export function Popup({ element }: IProps) {
       window.removeEventListener("keydown", onKeyDown, { capture: true });
       window.removeEventListener("blur", onWindowBlur, { capture: true });
       window.removeEventListener("resize", onWindowResize, { capture: true });
-      if (cardElement) {
-        cardElement.removeEventListener("mouseenter", onMouseEnterCard);
-        cardElement.removeEventListener("mouseleave", onMouseLeaveCard);
-        cardElement.removeEventListener("mousemove", onMouseMoveOnCard);
-      }
       chrome.runtime.onMessage.removeListener(messageListener);
       disposeFixUnfocusedDocumentInPdfFiles();
     };

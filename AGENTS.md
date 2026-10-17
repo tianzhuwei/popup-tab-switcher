@@ -9,9 +9,8 @@ Built with SolidJS, TypeScript, SCSS, and Webpack.
 
 ```bash
 # Build
-npm run build:dev        # Dev build → build-dev/
-npm run build:e2e        # E2E build → build-e2e/
-npm run build:prod       # Production build → build-prod/
+npm run build:dev        # Dev build → /Applications/01-CrhomeExtension/TabPop
+npm run build:prod       # Production build → build-prod_<timestamp>/
 
 # Dev server (watch mode)
 npm run start            # webpack watch --env development
@@ -27,9 +26,6 @@ npm test                 # mocha --bail ./src/**/*-test.{js,ts}
 # Run a single test file:
 npx mocha --require ts-node/register --bail ./src/utils/tab-registry-test.js
 
-# E2E tests
-npm run test:e2e         # build:e2e + mocha ./e2e/
-npm run test:e2e:mac     # macOS Chrome path variant
 ```
 
 ## Project Structure
@@ -82,7 +78,7 @@ src/
 - Prefer `interface` over `type` for object shapes
 - Use `chrome.tabs.Tab` directly or alias as `type ITab = chrome.tabs.Tab`
 - Avoid `any`; use `unknown` if needed
-- Global declarations in `webpack.d.ts` for build-time constants (`E2E`, `DEVELOPMENT`, `PRODUCTION`)
+- Global declarations in `webpack.d.ts` for build-time constants (`DEVELOPMENT`, `PRODUCTION`)
 
 ### Components (SolidJS)
 
@@ -100,7 +96,7 @@ src/
 
 ### Formatting
 
-- Prettier runs on all files via lint-staged (`*` → `prettier --ignore-unknown --write`)
+- Use Prettier on changed files while preserving existing file conventions
 - ESLint with airbnb-base config for `.ts`/`.js` files
 - No semicolons in some files (mixed style); follow existing file convention
 - Double quotes for strings in TypeScript
@@ -115,10 +111,10 @@ Version in `src/manifest.json` follows `YYYYMMDD.N` format:
 
 ## Build Output
 
-- `build-dev/` — development build (gitignored)
-- `build-e2e/` — E2E test build (gitignored)
-- `build-prod/` — production build (gitignored)
-- Load `build-dev/` as unpacked extension in Chrome for testing
+- `/Applications/01-CrhomeExtension/TabPop` — configured development output
+- `build-prod_<timestamp>/` — production build and ZIP archive (gitignored)
+- Load the configured development output as an unpacked extension in Chrome
+- Development builds include an automatic Chrome reload hook; disable it when only compilation is authorized
 
 ## Key Patterns
 

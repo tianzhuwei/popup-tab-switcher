@@ -96,13 +96,6 @@ $settings-dark-secondary: #d3c1f5;
   }
 }
 
-.settings__form {
-  margin: 0;
-  padding: 8px 12px;
-  // Keep the whole panel from scrolling; only expanded sections scroll.
-  overflow: hidden;
-}
-
 .settings__row {
   composes: mdc-form-field from global;
 

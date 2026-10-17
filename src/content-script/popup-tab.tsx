@@ -5,8 +5,6 @@ interface IProps {
   isSelected: boolean;
   isActive: boolean;
   isReducedMotion: boolean;
-  isLast: boolean;
-  isFirst: boolean;
   isPinned: boolean;
   tab: chrome.tabs.Tab;
   onClick: () => void;
@@ -59,7 +57,6 @@ export function PopupTab(props: IProps) {
       data-tab-id={props.tab.id}
       classList={{
         tab_selected: props.isSelected,
-        tab_pinned: props.isPinned,
       }}
       onClick={props.onClick}
       onMouseEnter={props.onHover}
@@ -109,9 +106,7 @@ export function PopupTab(props: IProps) {
       tabTextContentElement.scrollWidth - tabTextElement.clientWidth;
     const pixelsPerSecond = 90 * props.textScrollSpeed;
     if (textOverflow > 0 && pixelsPerSecond > 0) {
-      const hiddenTextWidthWithPadding = textOverflow;
-      const scrollTimeMs =
-        (hiddenTextWidthWithPadding / pixelsPerSecond) * 1000;
+      const scrollTimeMs = (textOverflow / pixelsPerSecond) * 1000;
       const durationMs = scrollTimeMs + 2 * props.textScrollDelay;
       const startDelayOffset = props.textScrollDelay / durationMs;
       const endDelayOffset = 1 - startDelayOffset;
@@ -126,11 +121,11 @@ export function PopupTab(props: IProps) {
             offset: startDelayOffset,
           },
           {
-            transform: `translateX(-${hiddenTextWidthWithPadding}px)`,
+            transform: `translateX(-${textOverflow}px)`,
             offset: endDelayOffset,
           },
           {
-            transform: `translateX(-${hiddenTextWidthWithPadding}px)`,
+            transform: `translateX(-${textOverflow}px)`,
             offset: 1,
           },
         ],

@@ -125,12 +125,6 @@ $mdc-theme-linear-channel-values: 0 0.0003035269835488375 0.000607053967097675 0
     ),
   );
 
-  $mdc-theme-text-emphasis: (
-    high: 0.87,
-    medium: 0.6,
-    disabled: 0.38,
-  );
-
   $contrast-tone: mdc-theme-contrast-tone($fill-color);
 
   @return map-get(map-get($mdc-theme-text-colors, $contrast-tone), $text-style);

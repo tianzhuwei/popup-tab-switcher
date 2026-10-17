@@ -57,13 +57,13 @@ function Section(props: {
   );
 }
 
-function Row(props: { title: string; children: any }) {
+function Row(props: { children: any }) {
   return <div class={styles.settings__row}>{props.children}</div>;
 }
 
 export function SettingsForm(props: IProps) {
   return (
-    <form class="settings__form">
+    <form>
       <Show
         when={
           !props.store.isKeyboardShortcutsEnabled &&
@@ -124,7 +124,7 @@ export function SettingsForm(props: IProps) {
 
       {/* Behavior */}
       <Section icon="tune" title="Behavior" defaultOpen={true}>
-        <Row title="Switch to a previously active tab when the current one closes">
+        <Row>
           <label
             for="isSwitchingToPreviouslyUsedTab"
             class={styles.settings__label}
@@ -143,7 +143,7 @@ export function SettingsForm(props: IProps) {
             }}
           />
         </Row>
-        <Row title="The switcher stays open and stops switching tabs on a modifier key release">
+        <Row>
           <label for="isStayingOpen" class={styles.settings__label}>
             <i class={styles.iconInLabel}>flip_to_front</i>
             Stay open
@@ -158,7 +158,7 @@ export function SettingsForm(props: IProps) {
             }}
           />
         </Row>
-        <Row title="When enabled, moving the mouse over a tab will immediately select it">
+        <Row>
           <label for="isHoverSelectingTab" class={styles.settings__label}>
             <i class={styles.iconInLabel}>mouse</i>
             Hover selects tab
@@ -173,7 +173,7 @@ export function SettingsForm(props: IProps) {
             }}
           />
         </Row>
-        <Row title="When enabled, the switcher shows tabs from all browser windows. When disabled, only tabs from the current window are shown">
+        <Row>
           <label
             for="isShowingTabsFromAllWindows"
             class={styles.settings__label}
@@ -196,7 +196,7 @@ export function SettingsForm(props: IProps) {
 
       {/* Appearance (layout in px) */}
       <Section icon="straighten" title="Appearance">
-        <Row title="Adds frosted glass and short popup animations. Uses more graphics resources when the switcher is open.">
+        <Row>
           <label
             for="isVisualEffectsEnabled"
             class={styles.settings__label}
@@ -216,7 +216,7 @@ export function SettingsForm(props: IProps) {
             }}
           />
         </Row>
-        <Row title="Sets the popup width">
+        <Row>
           <label for="popupWidth" class={styles.settings__label}>
             <i class={styles.iconInLabel}>border_horizontal</i>
             Popup width
@@ -230,7 +230,7 @@ export function SettingsForm(props: IProps) {
             }}
           />
         </Row>
-        <Row title="Sets the popup height">
+        <Row>
           <label for="tabHeight" class={styles.settings__label}>
             <i class={styles.iconInLabel}>format_line_spacing</i>
             Tab height
@@ -244,7 +244,7 @@ export function SettingsForm(props: IProps) {
             }}
           />
         </Row>
-        <Row title="Specifies how many recently used tabs to show in the popup">
+        <Row>
           <label for="numberOfTabsToShow" class={styles.settings__label}>
             <i class={styles.iconInLabel}>format_list_numbered</i>
             Max number of tabs
@@ -257,7 +257,7 @@ export function SettingsForm(props: IProps) {
             }}
           />
         </Row>
-        <Row title="Sets the size of the tab title text">
+        <Row>
           <label for="fontSize" class={styles.settings__label}>
             <i class={styles.iconInLabel}>format_size</i>
             Font size
@@ -271,7 +271,7 @@ export function SettingsForm(props: IProps) {
             }}
           />
         </Row>
-        <Row title="Sets the size of the tab icon">
+        <Row>
           <label for="iconSize" class={styles.settings__label}>
             <i class={styles.iconInLabel}>crop_original</i>
             Icon size
@@ -285,7 +285,7 @@ export function SettingsForm(props: IProps) {
             }}
           />
         </Row>
-        <Row title="Sets popup opacity (0 - invisible, 100 - visible)">
+        <Row>
           <label for="opacity" class={styles.settings__label}>
             <i class={styles.iconInLabel}>opacity</i>
             Opacity
@@ -305,7 +305,7 @@ export function SettingsForm(props: IProps) {
 
       {/* Advanced */}
       <Section icon="speed" title="Advanced">
-        <Row title="If a tab title is wider than the popup then its overflowing part will be hidden. When such a tab is selected its text will be scrolled. This option delays the start of the scrolling">
+        <Row>
           <label for="textScrollDelay" class={styles.settings__label}>
             <i class={styles.iconInLabel}>timer</i>
             Text scroll delay
@@ -319,7 +319,7 @@ export function SettingsForm(props: IProps) {
             }}
           />
         </Row>
-        <Row title="Sets the speed of a selected tab text scrolling">
+        <Row>
           <label for="textScrollSpeed" class={styles.settings__label}>
             <i class={styles.iconInLabel}>text_rotation_none</i>
             Text scroll speed

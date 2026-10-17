@@ -7,14 +7,6 @@
   composes: mdc-button--raised from global;
 }
 
-.buttonOutlined {
-  composes: mdc-button--outlined from global;
-}
-
-.buttonUnelevated {
-  composes: mdc-button--unelevated from global;
-}
-
 .icon {
   composes: materialIcon from global;
 }

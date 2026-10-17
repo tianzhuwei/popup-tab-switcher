@@ -2,7 +2,6 @@ import { ISettings } from "./settings";
 import { log } from "./logger";
 
 type MessageSender = chrome.runtime.MessageSender;
-type Port = chrome.runtime.Port;
 type ChromeTab = chrome.tabs.Tab;
 
 export enum Message {
@@ -133,17 +132,10 @@ function isMessage(message: { type: string }): message is IMessage {
   return message.type in Message;
 }
 
-function getSender(senderOrPort: MessageSender | Port): MessageSender {
-  if (hasOwnProperty(senderOrPort, "sender")) {
-    return senderOrPort.sender as MessageSender;
-  }
-  return senderOrPort as MessageSender;
-}
-
 export function handleMessage(handlers: Partial<IHandlers>) {
   return (
     message: unknown,
-    sender: MessageSender | Port,
+    sender: MessageSender,
     sendResponse: (response?: any) => void
   ) => {
     if (!isTypedObject(message)) {
@@ -154,10 +146,6 @@ export function handleMessage(handlers: Partial<IHandlers>) {
       return;
     }
     if (!isMessage(message)) {
-      if (DEVELOPMENT && message.type.startsWith("SIGN")) {
-        // Ignore messages that came from webpack-chrome-extension-reloader
-        return;
-      }
       console.error("There is no message of such type in registry.", message);
       return;
     }
@@ -172,7 +160,7 @@ export function handleMessage(handlers: Partial<IHandlers>) {
     log(`[Message received]`, message);
     // @ts-expect-error
     // TODO: How to guarantee correspondence of a message and handler types?
-    const response = handler(message, getSender(sender));
+    const response = handler(message, sender);
     if (response) {
       Promise.resolve(response).then(sendResponse);
       return true; // indicates that response will be sent asynchronously

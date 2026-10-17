@@ -119,7 +119,8 @@ export function createPopupStore() {
     removeTab,
   };
 
-  function selectNextTab(increment: number, listLength = store.tabs.length) {
+  function selectNextTab(increment: number) {
+    const listLength = store.tabs.length;
     if (listLength <= 0) {
       return;
     }
