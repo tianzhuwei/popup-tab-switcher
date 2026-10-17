@@ -9,6 +9,8 @@ export class ServiceFactory {
 
   private static registryCache: TabRegistry | undefined
 
+  private static registryInitialization: Promise<TabRegistry> | undefined
+
   static async getSettings(reload = false): Promise<ISettingsService> {
     if (!reload && ServiceFactory.settingsCache) {
       return ServiceFactory.settingsCache
@@ -23,28 +25,34 @@ export class ServiceFactory {
     if (ServiceFactory.registryCache) {
       return ServiceFactory.registryCache
     }
-    const [settings, openTabs, savedTabs, pinnedTabIds] = await Promise.all([
-      ServiceFactory.getSettings(),
-      getOpenTabs(),
-      getSavedTabs(),
-      getSavedPinnedTabIds(),
-    ])
-    const registry = TabRegistryFactory.create({
-      numberOfTabsToShow: settings.numberOfTabsToShow,
-      openTabs,
-      savedTabs,
-      pinnedTabIds,
-      onTabsUpdate: saveTabs,
-      onPinnedUpdate: savePinnedTabIds,
-    })
-    ServiceFactory.registryCache = registry
-    log(`[Registry initialized]`, {
-      openTabs,
-      savedTabs,
-      pinnedTabIds,
-      registryTitles: registry.titles(),
-    })
-    return registry
+    if (!ServiceFactory.registryInitialization) {
+      ServiceFactory.registryInitialization = Promise.all([
+        ServiceFactory.getSettings(),
+        getOpenTabs(),
+        getSavedTabs(),
+        getSavedPinnedTabIds(),
+      ]).then(([settings, openTabs, savedTabs, pinnedTabIds]) => {
+        const registry = TabRegistryFactory.create({
+          numberOfTabsToShow: settings.numberOfTabsToShow,
+          openTabs,
+          savedTabs,
+          pinnedTabIds,
+          onTabsUpdate: saveTabs,
+          onPinnedUpdate: savePinnedTabIds,
+        })
+        ServiceFactory.registryCache = registry
+        log(`[Registry initialized]`, {
+          openTabs,
+          savedTabs,
+          pinnedTabIds,
+          registryTitles: registry.titles(),
+        })
+        return registry
+      }).finally(() => {
+        ServiceFactory.registryInitialization = undefined
+      })
+    }
+    return ServiceFactory.registryInitialization
   }
 }
 

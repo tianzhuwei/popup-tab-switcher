@@ -176,23 +176,17 @@ export default class TabRegistry {
     let promiseResolve: (status: boolean) => void = () => {}
     const promise = new Promise<boolean>((resolve) => {
       promiseResolve = resolve
-      chrome.scripting
-        .executeScript({
-          target: {tabId: tab.id, allFrames: false},
-          files: ['content.js'],
-        })
-        .catch((e) => {
-          log(`[tab initialization failed due to executeScript()]`, tab, e)
-          promiseResolve(false)
-        })
     })
     const tabSwitchingTimeoutMs = 400
     const timeout = self.setTimeout(() => {
       log(`[tab initialization failed due to timeout]`, tab)
-      promiseResolve(false)
+      result.resolver(false)
     }, tabSwitchingTimeoutMs)
     const result: ITabInitialization = {
       resolver: (status) => {
+        if (this.tabInitializations.get(tab.id) !== result) {
+          return
+        }
         this.tabInitializations.delete(tab.id)
         clearTimeout(timeout)
         promiseResolve(status)
@@ -201,6 +195,20 @@ export default class TabRegistry {
       timeout,
     }
     this.tabInitializations.set(tab.id, result)
+    const onInjectionError = (e: unknown) => {
+      log(`[tab initialization failed due to executeScript()]`, tab, e)
+      result.resolver(false)
+    }
+    try {
+      chrome.scripting
+        .executeScript({
+          target: {tabId: tab.id, allFrames: false},
+          files: ['content.js'],
+        })
+        .catch(onInjectionError)
+    } catch (e) {
+      onInjectionError(e)
+    }
     return result
   }
 
