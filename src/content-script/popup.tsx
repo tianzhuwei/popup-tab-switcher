@@ -351,11 +351,31 @@ export function Popup({ element }: IProps) {
           [
             {
               opacity: 0,
-              transform: `translateY(${5 / store.zoomFactor}px) scale(0.985)`,
+              transform: `translateY(${10 / store.zoomFactor}px) scale(0.94)`,
+              offset: 0,
+              easing: "cubic-bezier(0.16, 1, 0.3, 1)",
             },
-            { opacity: 1, transform: "translateY(0) scale(1)" },
+            {
+              opacity: 1,
+              transform: `translateY(${-2 / store.zoomFactor}px) scale(1.025)`,
+              offset: 0.48,
+              easing: "ease-in-out",
+            },
+            {
+              opacity: 1,
+              transform: `translateY(${1 / store.zoomFactor}px) scale(0.994)`,
+              offset: 0.72,
+              easing: "ease-in-out",
+            },
+            {
+              opacity: 1,
+              transform: "translateY(0) scale(1.004)",
+              offset: 0.88,
+              easing: "ease-in-out",
+            },
+            { opacity: 1, transform: "translateY(0) scale(1)", offset: 1 },
           ],
-          { duration: 170, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" }
+          { duration: 320, easing: "linear" }
         );
         popupAnimation = animation;
         animation.onfinish = () => {

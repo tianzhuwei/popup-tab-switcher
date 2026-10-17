@@ -42,13 +42,13 @@ $color-blue-mariner-light: #4285f4;
 // Popup surfaces share the same layout with optional glass effects.
 @mixin popup-theme-light() {
   --card-color: #1d2944;
-  --card-background-color: #f3f6fc;
-  --card-glass-background-color: rgba(240, 245, 255, 0.78);
+  --card-background-color: #fafcff;
+  --card-glass-background-color: rgba(250, 252, 255, 0.78);
   --card-border-color: rgba(255, 255, 255, 0.88);
-  --card-blue-reflection: rgba(148, 196, 255, 0.16);
-  --card-violet-reflection: rgba(171, 151, 255, 0.17);
-  --card-shadow: 0 18px 54px rgba(34, 49, 90, 0.2),
-    0 3px 12px rgba(34, 49, 90, 0.08);
+  --card-blue-reflection: rgba(185, 215, 255, 0.1);
+  --card-violet-reflection: rgba(211, 198, 255, 0.1);
+  --card-shadow: 0 18px 54px rgba(34, 49, 90, 0.14),
+    0 3px 12px rgba(34, 49, 90, 0.06);
   --card-glass-highlight: inset 0 0 0 1px rgba(255, 255, 255, 0.38),
     0 0 22px rgba(159, 188, 255, 0.12);
   --card-divider-color: rgba(106, 124, 168, 0.15);
@@ -73,13 +73,13 @@ $color-blue-mariner-light: #4285f4;
 
 @mixin popup-theme-dark() {
   --card-color: #e7ecfa;
-  --card-background-color: #1c2334;
-  --card-glass-background-color: rgba(24, 31, 47, 0.82);
+  --card-background-color: #354157;
+  --card-glass-background-color: rgba(53, 65, 87, 0.82);
   --card-border-color: rgba(176, 195, 240, 0.2);
-  --card-blue-reflection: rgba(79, 134, 232, 0.12);
-  --card-violet-reflection: rgba(136, 100, 218, 0.13);
-  --card-shadow: 0 18px 54px rgba(3, 7, 18, 0.46),
-    0 3px 12px rgba(3, 7, 18, 0.2);
+  --card-blue-reflection: rgba(141, 183, 249, 0.08);
+  --card-violet-reflection: rgba(181, 157, 239, 0.08);
+  --card-shadow: 0 18px 54px rgba(3, 7, 18, 0.32),
+    0 3px 12px rgba(3, 7, 18, 0.14);
   --card-glass-highlight: inset 0 0 0 1px rgba(201, 215, 255, 0.06),
     0 0 24px rgba(95, 124, 233, 0.1);
   --card-divider-color: rgba(154, 174, 219, 0.14);
