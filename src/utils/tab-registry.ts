@@ -69,6 +69,32 @@ export default class TabRegistry {
     return Array.from(this.pinnedTabIds)
   }
 
+  restorePins(tabIds: number[]) {
+    const existing = new Set(this.tabs.map((tab) => tab.id))
+    for (const id of tabIds) {
+      if (existing.has(id)) {
+        this.pinnedTabIds.add(id)
+      }
+    }
+    this.onPinnedUpdate(this.getPinnedTabIds())
+  }
+
+  refreshTabs(tabs: ITab[]) {
+    const current = new Map(tabs.map((tab) => [tab.id, tab]))
+    this.tabs = this.tabs.map((tab) => current.get(tab.id) || tab)
+    this.onUpdate(this.tabs)
+  }
+
+  replaceTab(removedId: number, tab: ITab) {
+    this.tabs = this.tabs.map((current) => current.id === removedId ? tab : current)
+    this.removeFromInitialized(removedId)
+    if (this.pinnedTabIds.delete(removedId)) {
+      this.pinnedTabIds.add(tab.id)
+      this.onPinnedUpdate(this.getPinnedTabIds())
+    }
+    this.onUpdate(this.tabs)
+  }
+
   addToInitialized(tab: ITab) {
     this.initializedTabs[tab.id] = tab
     const initialization = this.tabInitializations.get(tab.id)
@@ -159,6 +185,7 @@ export default class TabRegistry {
   }
 
   pushUnderTop(tab: ITab) {
+    this.tabs = this.removeTab(tab.id)
     const top = this.getActive()
     if (top) {
       this.tabs.push(top)

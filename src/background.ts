@@ -48,6 +48,20 @@ function initListeners() {
   chrome.tabs.onActivated.addListener(handleTabActivation);
   chrome.tabs.onUpdated.addListener(handleTabUpdate);
   chrome.tabs.onRemoved.addListener(handleTabRemove);
+  chrome.tabs.onMoved.addListener(() =>
+    ServiceFactory.scheduleRegistryRefresh()
+  );
+  chrome.tabs.onAttached.addListener(() =>
+    ServiceFactory.scheduleRegistryRefresh()
+  );
+  chrome.tabs.onDetached.addListener(() =>
+    ServiceFactory.scheduleRegistryRefresh()
+  );
+  chrome.tabs.onReplaced.addListener((addedId, removedId) => {
+    ServiceFactory.replaceTab(addedId, removedId).catch((error) =>
+      log("[Tab replacement failed]", error)
+    );
+  });
   chrome.runtime.onConnect.addListener(handleConnection);
   chrome.commands.onCommand.addListener(handleCommand);
   chrome.runtime.onMessage.addListener(handleMessage(messageHandlers()));
@@ -131,6 +145,7 @@ async function handleTabActivation(info?: chrome.tabs.TabActiveInfo) {
 }
 
 async function handleTabCreation(tab: ChromeTab) {
+  ServiceFactory.scheduleRegistryRefresh();
   const registry = await ServiceFactory.getTabRegistry();
   if (tab.active) {
     registry.push(checkTab(tab));
@@ -146,18 +161,31 @@ async function handleTabUpdate(
   changeInfo: chrome.tabs.TabChangeInfo,
   tab: ChromeTab
 ) {
+  const hasRecoveryMetadata =
+    changeInfo.url !== undefined ||
+    changeInfo.title !== undefined ||
+    changeInfo.status !== undefined ||
+    changeInfo.discarded !== undefined;
+  if (hasRecoveryMetadata) {
+    ServiceFactory.scheduleRegistryRefresh();
+  }
   const registry = await ServiceFactory.getTabRegistry();
+  // Restored/discarded tabs may supply their identity without a complete event.
+  if (hasRecoveryMetadata) {
+    registry.update(checkTab(tab));
+  }
   if (changeInfo.status === "complete") {
     log(`[handleTabUpdate tabId]`, tabId, tab.title);
     registry.removeFromInitialized(tabId);
-    registry.update(checkTab(tab));
   }
 }
 
 async function handleTabRemove(tabId: number) {
+  ServiceFactory.scheduleRegistryRefresh();
   const registry = await ServiceFactory.getTabRegistry();
   log(`[handleTabRemove start]`, tabId);
   log(`[current registry]`, registry.titles());
+  ServiceFactory.cancelPinRecovery(tabId, true);
   registry.remove(tabId);
   if (suppressAutoSwitchTabIds.has(tabId)) {
     suppressAutoSwitchTabIds.delete(tabId);
@@ -241,11 +269,14 @@ function messageHandlers(): Partial<IHandlers> {
     },
     [Message.TogglePinTab]: async ({ tabId }) => {
       const registry = await ServiceFactory.getTabRegistry();
+      ServiceFactory.cancelPinRecovery(tabId);
       registry.togglePin(tabId);
     },
     [Message.CloseTab]: async ({ tabId }) => {
+      await ServiceFactory.getTabRegistry();
       suppressAutoSwitchTabIds.add(tabId);
       await chrome.tabs.remove(tabId);
+      ServiceFactory.cancelPinRecovery(tabId, true);
     },
     [Message.CreateTab]: async (_m, sender) => {
       await chrome.tabs.create({ windowId: sender.tab?.windowId });
