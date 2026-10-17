@@ -61,6 +61,7 @@ export function createPopupStore() {
       }
       setStore("selectedTabIndex", targetIndex);
     }
+    return model;
   };
 
   const togglePin = async (tabId: number) => {

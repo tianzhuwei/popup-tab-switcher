@@ -225,14 +225,13 @@ function messageHandlers(): Partial<IHandlers> {
     [Message.GET_MODEL]: async (_m, sender) => {
       const settings = await ServiceFactory.getSettings();
       const registry = await ServiceFactory.getTabRegistry();
-      const activeTab = registry.getActive();
-      const previousTab = registry.getPreviouslyActive();
       const senderWindowId = sender.tab?.windowId;
-      const tabs = settings.isShowingTabsFromAllWindows
-        ? registry.getTabsToShow()
-        : registry
-            .getTabsToShow()
-            .filter((tab) => tab.windowId === senderWindowId);
+      const isInScope = (tab: ITab) =>
+        settings.isShowingTabsFromAllWindows || tab.windowId === senderWindowId;
+      const recentTabs = registry.getTabs().filter(isInScope);
+      const activeTab = recentTabs[recentTabs.length - 1];
+      const previousTab = recentTabs[recentTabs.length - 2];
+      const tabs = registry.getTabsToShow(isInScope);
       return {
         tabs: tabs as chrome.tabs.Tab[],
         settings,

@@ -116,8 +116,8 @@ export default class TabRegistry {
     return this.tabs.slice()
   }
 
-  getTabsToShow(): ITab[] {
-    const recentTabs = this.tabs.slice(-this.numberOfTabsToShow).reverse()
+  getTabsToShow(filter: (tab: ITab) => boolean = () => true): ITab[] {
+    const recentTabs = this.tabs.filter(filter).reverse()
     const pinnedTabs: ITab[] = []
     const unpinnedTabs: ITab[] = []
 
@@ -129,7 +129,16 @@ export default class TabRegistry {
       }
     }
 
-    return [...pinnedTabs, ...unpinnedTabs]
+    // Keep the current and previous tabs available even when pins fill the limit.
+    const tabLimit = this.numberOfTabsToShow || recentTabs.length
+    const minimumUnpinnedTabs = recentTabs
+      .slice(0, Math.min(2, tabLimit))
+      .filter((tab) => !this.pinnedTabIds.has(tab.id)).length
+    const unpinnedSlots = Math.max(
+      tabLimit - pinnedTabs.length,
+      minimumUnpinnedTabs
+    )
+    return [...pinnedTabs, ...unpinnedTabs.slice(0, unpinnedSlots)]
   }
 
   getActive(): ITab | undefined {

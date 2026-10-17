@@ -291,9 +291,19 @@ export function Popup({ element }: IProps) {
       },
       [Message.CLOSE_POPUP]: closePopup,
       [Message.SELECT_TAB]: async ({ increment }) => {
-        await syncStoreWithBackground();
+        const model = await syncStoreWithBackground();
+        const previousTabIndex =
+          !store.isOpen &&
+          increment === 1 &&
+          model.settings.isSwitchingToPreviouslyUsedTab
+            ? model.tabs.findIndex((tab) => tab.id === model.previousTabId)
+            : -1;
         openPopup();
-        selectNextTab(increment);
+        if (previousTabIndex !== -1) {
+          selectTabIndex(previousTabIndex);
+        } else {
+          selectNextTab(increment);
+        }
       },
     });
     chrome.runtime.onMessage.addListener(messageListener);
