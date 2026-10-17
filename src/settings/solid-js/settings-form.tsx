@@ -202,7 +202,7 @@ export function SettingsForm(props: IProps) {
             class={styles.settings__label}
             title="Frosted glass and short animations. Uses more graphics resources while open."
           >
-            <i class={styles.iconInLabel}>auto_awesome</i>
+            <i class={styles.iconInLabel}>blur_on</i>
             Visual effects
           </label>
           <MSwitch
