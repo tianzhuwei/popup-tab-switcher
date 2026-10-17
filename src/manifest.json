@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "version": "20261017.8",
+  "version": "20261017.9",
   "name": "Popup Tab Switcher",
   "description": "Makes switching between tabs more convenient.",
   "permissions": ["activeTab", "favicon", "scripting", "storage", "tabs"],

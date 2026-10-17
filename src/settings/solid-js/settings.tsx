@@ -31,8 +31,7 @@ export function Settings(props: ISettingsProps) {
   createEffect(() => {
     const dark = isDark();
     document.documentElement.classList.toggle("theme-dark", dark);
-    const bg = dark ? "#1a1a1a" : "#f8fafc";
-    document.body.style.backgroundColor = bg;
+    document.body.style.backgroundColor = "var(--settings-background-color)";
   });
 
   return (

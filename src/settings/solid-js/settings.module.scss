@@ -1,6 +1,11 @@
 @use 'src/styles/variables' as *;
 @use 'src/styles/color-theme-builder' as *;
 
+$settings-dark-background: #354157;
+$settings-dark-surface: #3c4961;
+$settings-dark-primary: #a4caff;
+$settings-dark-secondary: #d3c1f5;
+
 :global {
   // Theme variables live on :root so the body and container share them.
   :root {
@@ -15,13 +20,13 @@
 
   // Dark overrides are applied by toggling this class on the root element.
   :root.theme-dark {
-    --settings-background-color: #{$color-dark-bg};
-    --settings-card-background: #{$color-dark-surface};
-    --settings-border-color: #{$color-dark-border};
-    --settings-text-primary: #{$color-dark-text};
-    --settings-text-secondary: #{$color-dark-text-secondary};
-    --settings-accent-color: #{$color-blue-lighter};
-    --settings-row-hover: #{$color-dark-surface-hover};
+    --settings-background-color: #{$settings-dark-background};
+    --settings-card-background: #{$settings-dark-surface};
+    --settings-border-color: rgba(176, 195, 240, 0.22);
+    --settings-text-primary: #e7ecfa;
+    --settings-text-secondary: #c0cbe2;
+    --settings-accent-color: #{$settings-dark-primary};
+    --settings-row-hover: #44516b;
   }
 
   html {
@@ -62,14 +67,32 @@
 
   &_dark {
     $theme-dark: (
-      'primary': $color-blue-lighter,
-      'secondary': $color-blue-light,
-      'background': $color-dark-bg,
-      'surface': $color-dark-surface,
+      'primary': $settings-dark-primary,
+      'secondary': $settings-dark-secondary,
+      'background': $settings-dark-background,
+      'surface': $settings-dark-surface,
     );
 
     $colors: get-theme-colors($theme-dark);
     @include theme-colors-as-custom-properties($colors);
+
+    :global(.mdc-switch:not(.mdc-switch--checked)) {
+      :global(.mdc-switch__track) {
+        background-color: #91a3c3;
+        border-color: #91a3c3;
+        opacity: 0.6;
+      }
+
+      :global(.mdc-switch__thumb) {
+        background-color: #d9e3f6;
+        border-color: #d9e3f6;
+      }
+    }
+
+    .segmented__option_active {
+      background: linear-gradient(105deg, #a4caff, #b9c8fa 62%, #d3c1f5);
+      color: #233b60;
+    }
   }
 }
 

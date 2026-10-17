@@ -491,18 +491,20 @@ export function Popup({ element }: IProps) {
       [Message.CLOSE_POPUP]: closePopup,
       [Message.SELECT_TAB]: async ({ increment }) => {
         const model = await syncStoreWithBackground();
-        const previousTabIndex =
-          !store.isOpen &&
-          increment === 1 &&
-          model.settings.isSwitchingToPreviouslyUsedTab
-            ? model.tabs.findIndex((tab) => tab.id === model.previousTabId)
-            : -1;
-        openPopup();
-        if (previousTabIndex !== -1) {
-          selectTabIndex(previousTabIndex);
-        } else {
+        if (store.isOpen) {
           selectNextTab(increment);
+        } else if (
+          model.settings.isSwitchingToPreviouslyUsedTab &&
+          model.previousTabId !== undefined
+        ) {
+          const previousTabIndex = model.tabs.findIndex(
+            (tab) => tab.id === model.previousTabId
+          );
+          if (previousTabIndex !== -1) {
+            selectTabIndex(previousTabIndex);
+          }
         }
+        openPopup();
       },
     });
     chrome.runtime.onMessage.addListener(messageListener);

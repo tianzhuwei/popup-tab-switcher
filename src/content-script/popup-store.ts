@@ -48,10 +48,7 @@ export function createPopupStore() {
 
     if (!store.isOpen) {
       let targetIndex = 0;
-      if (
-        model.settings.isSwitchingToPreviouslyUsedTab &&
-        model.activeTabId !== undefined
-      ) {
+      if (model.activeTabId !== undefined) {
         const foundIndex = model.tabs.findIndex(
           (tab) => tab.id === model.activeTabId
         );
