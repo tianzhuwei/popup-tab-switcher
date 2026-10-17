@@ -51,18 +51,19 @@ $color-blue-mariner-light: #4285f4;
     0 3px 12px rgba(34, 49, 90, 0.06);
   --card-glass-highlight: inset 0 0 0 1px rgba(255, 255, 255, 0.38),
     0 0 22px rgba(159, 188, 255, 0.12);
-  --card-divider-color: rgba(106, 124, 168, 0.15);
   --card-button-background: rgba(255, 255, 255, 0.48);
   --card-button-hover-background: rgba(255, 255, 255, 0.82);
   --card-button-border-color: rgba(255, 255, 255, 0.92);
   --tab_selected-background: linear-gradient(
     105deg,
-    #197bff 0%,
-    #4166ff 62%,
-    #9472fa 100%
+    #c7e2ff 0%,
+    #d5ddff 62%,
+    #e6dcff 100%
   );
+  --tab_selected-color: #254268;
+  --tab_selected-secondary-color: #52648a;
   --tab_selected-glow: inset 0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 2px 9px rgba(78, 103, 238, 0.17);
+    0 2px 9px rgba(78, 103, 238, 0.1);
   --tab_hover-background: rgba(255, 255, 255, 0.48);
   --tab-secondary-color: #7382a4;
   --tab_accent-color: #2278f6;
@@ -82,18 +83,19 @@ $color-blue-mariner-light: #4285f4;
     0 3px 12px rgba(3, 7, 18, 0.14);
   --card-glass-highlight: inset 0 0 0 1px rgba(201, 215, 255, 0.06),
     0 0 24px rgba(95, 124, 233, 0.1);
-  --card-divider-color: rgba(154, 174, 219, 0.14);
   --card-button-background: rgba(162, 184, 242, 0.08);
   --card-button-hover-background: rgba(162, 184, 242, 0.17);
   --card-button-border-color: rgba(185, 204, 255, 0.2);
   --tab_selected-background: linear-gradient(
     105deg,
-    #1768e8 0%,
-    #4b5fe5 62%,
-    #8563dd 100%
+    #a4caff 0%,
+    #b9c8fa 62%,
+    #d3c1f5 100%
   );
+  --tab_selected-color: #233b60;
+  --tab_selected-secondary-color: #49608c;
   --tab_selected-glow: inset 0 0 0 1px rgba(255, 255, 255, 0.1),
-    0 2px 9px rgba(49, 61, 167, 0.25);
+    0 2px 9px rgba(49, 61, 167, 0.12);
   --tab_hover-background: rgba(167, 190, 248, 0.08);
   --tab-secondary-color: #98a6c7;
   --tab_accent-color: #8eb8ff;

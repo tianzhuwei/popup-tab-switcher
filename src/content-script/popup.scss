@@ -107,7 +107,6 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  border-top: var(--popup-unit) solid var(--card-divider-color);
 }
 
 .card__newTabButton {
@@ -157,7 +156,7 @@
   &.tab_selected:hover {
     background: var(--tab_selected-background);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
-    color: #fff;
+    color: var(--tab_selected-color);
   }
 }
 
@@ -231,12 +230,12 @@
   }
 
   .tab__domain {
-    color: rgba(255, 255, 255, 0.78);
+    color: var(--tab_selected-secondary-color);
   }
 
   .tab__closeButton,
   .tab__pinButton {
-    color: #fff;
+    color: var(--tab_selected-color);
   }
 }
 
@@ -291,8 +290,8 @@
 .tab_selected {
   .tab__closeButton:hover,
   .tab__pinButton:hover {
-    color: #fff;
-    background-color: rgba(255, 255, 255, 0.18);
+    color: var(--tab_selected-color);
+    background-color: rgba(49, 75, 125, 0.1);
   }
 }
 
@@ -319,7 +318,7 @@
 .tab_selected {
   .tab__closeButton:focus-visible,
   .tab__pinButton:focus-visible {
-    outline-color: #fff;
+    outline-color: var(--tab_selected-color);
   }
 }
 
