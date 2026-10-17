@@ -22,7 +22,7 @@ interface IProps {
   element: HTMLElement;
 }
 
-export function Popup({ element }: IProps) {
+function Popup({ element }: IProps) {
   const {
     store,
     syncStoreWithBackground,
@@ -174,7 +174,6 @@ export function Popup({ element }: IProps) {
               card_dark: isDark(),
               card_enhanced: store.settings.isVisualEffectsEnabled,
             }}
-            data-test="card"
             onMouseEnter={onMouseEnterCard}
             onMouseLeave={onMouseLeaveCard}
             onMouseMove={onMouseMoveOnCard}
@@ -698,7 +697,7 @@ export function Popup({ element }: IProps) {
   }
 }
 
-export class PopupTabSwitcherElement extends HTMLElement {
+class PopupTabSwitcherElement extends HTMLElement {
   shadowRoot: ShadowRoot;
 
   /**

@@ -85,9 +85,9 @@ interface IMessageTypeToObjectMap {
   [Message.CreateTab]: ReturnType<typeof createTab>;
 }
 
-export type IMessage = IMessageTypeToObjectMap[keyof IMessageTypeToObjectMap];
+type IMessage = IMessageTypeToObjectMap[keyof IMessageTypeToObjectMap];
 
-export interface IGetModelResponse {
+interface IGetModelResponse {
   settings: ISettings;
   tabs: chrome.tabs.Tab[];
   zoomFactor: number;
@@ -96,12 +96,13 @@ export interface IGetModelResponse {
   previousTabId: number | undefined;
 }
 
-export type IMessageResponse<Message extends IMessage> =
-  Message extends ReturnType<typeof getModel>
-    ? IGetModelResponse
-    : Message extends ReturnType<typeof getSettings>
-    ? ISettings
-    : void;
+type IMessageResponse<Message extends IMessage> = Message extends ReturnType<
+  typeof getModel
+>
+  ? IGetModelResponse
+  : Message extends ReturnType<typeof getSettings>
+  ? ISettings
+  : void;
 
 export type IHandlers = {
   [key in Message]: (

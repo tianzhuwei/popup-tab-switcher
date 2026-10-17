@@ -14,7 +14,7 @@ interface ISettingsProps {
   settingsStore: ISettingsStore;
 }
 
-export function Settings(props: ISettingsProps) {
+function Settings(props: ISettingsProps) {
   const {
     store,
     setKeyboardShortcutsEnabled,
@@ -38,7 +38,6 @@ export function Settings(props: ISettingsProps) {
     <div
       class={`${styles.settings} mdc-typography`}
       classList={{ [styles.settings_dark]: isDark() }}
-      data-test="settings"
     >
       <SettingsForm
         store={store}

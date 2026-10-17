@@ -93,13 +93,13 @@ export function SettingsForm(props: IProps) {
         class={styles.settings__row}
         title="Choose a theme. Auto follows your operating system's light or dark appearance."
       >
-        <span class={styles.settings__label} data-test="themeModeLabel">
+        <span class={styles.settings__label}>
           <i class={styles.iconInLabel}>brightness_6</i>
           Theme
         </span>
       </div>
       <div class={`${styles.settings__row} ${styles.settings__row_segmented}`}>
-        <div class={styles.segmented} data-test="themeModeToggle">
+        <div class={styles.segmented}>
           <For each={themeOptions}>
             {(option) => (
               <button
@@ -338,7 +338,6 @@ export function SettingsForm(props: IProps) {
           class={styles.resetRow}
           title="Restore every setting to its default value"
           onClick={props.restoreDefaultSettings}
-          data-test="resetButton"
         >
           <i class={styles.iconInLabel}>restore</i>
           <span class={styles.resetRow__text}>Reset all to defaults</span>

@@ -194,8 +194,7 @@ export class PinRecovery {
         const complete = this.sameLayout(
           rows,
           current.map((tab) => ({
-            url: tabUrl(tab),
-            title: tab.title || ''
+            url: tabUrl(tab)
           }))
         )
         for (let row = 0; row < window.tabs.length; row += 1) {

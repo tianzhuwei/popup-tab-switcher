@@ -97,7 +97,7 @@ src/
 ### Formatting
 
 - Use Prettier on changed files while preserving existing file conventions
-- ESLint with airbnb-base config for `.ts`/`.js` files
+- ESLint CLI is retained; no project rule configuration is currently checked in
 - No semicolons in some files (mixed style); follow existing file convention
 - Double quotes for strings in TypeScript
 

@@ -93,7 +93,6 @@ export class ServiceFactory {
   }
 
   static cancelPinRecovery(tabId: number, closing = false): void {
-    ServiceFactory.refreshRevision += 1
     const tab = ServiceFactory.registryCache
       ?.getTabs()
       .find((item) => item.id === tabId)

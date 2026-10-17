@@ -113,7 +113,7 @@ export class SelectionAndFocus {
   }
 }
 
-export interface IInputElementSelection {
+interface IInputElementSelection {
   start: number
   end: number
   direction: 'forward' | 'backward' | 'none'

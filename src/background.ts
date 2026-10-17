@@ -19,8 +19,7 @@ type IPort = chrome.runtime.Port;
 const suppressAutoSwitchTabIds = new Set<number>();
 const CLOSE_TAB_MENU_ID = "close-current-tab";
 
-// NOTE: This is somehow related to the test "focuses previously active window on a tab closing".
-// TODO: Describe the problem in more details.
+// Tracks the requested tab while asynchronous activation events arrive.
 let tabIdToBeActivated: undefined | number;
 
 if (DEVELOPMENT) {
@@ -294,8 +293,6 @@ function messageHandlers(): Partial<IHandlers> {
       }
       if (await initializeContentScript(active)) {
         await chrome.tabs.sendMessage(active.id, demoSettings());
-      } else {
-        // TODO: Show extension in a separate window
       }
     },
     [Message.GET_MODEL]: async (_m, sender) => {
@@ -378,8 +375,7 @@ async function activateTab({ id, windowId }: ChromeTab) {
   log(`[tab activation is started]`, { id, windowId });
   tabIdToBeActivated = id;
   try {
-    // The tab can already be removed from the browser, for example when a user quickly closes multiple tabs.
-    // To handle this situation without an error we can use debounce technique.
+    // The tab can disappear before update; the catch below handles that race.
     // @ts-expect-error Todo: fix this
     await chrome.tabs.update(id, { active: true });
     if (await isBrowserFocused()) {
