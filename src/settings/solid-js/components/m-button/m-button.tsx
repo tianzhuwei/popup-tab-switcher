@@ -1,5 +1,4 @@
-import {onMount} from 'solid-js'
-// eslint-disable-next-line import/no-extraneous-dependencies
+import {onCleanup, onMount} from 'solid-js'
 import {MDCRipple} from '@material/ripple/index'
 import styles from './m-button.module.scss'
 
@@ -11,8 +10,12 @@ interface IProps {
 
 export function MButton(props: IProps) {
   let buttonElement: HTMLButtonElement
+  let ripple: MDCRipple | undefined
   onMount(() => {
-    MDCRipple.attachTo(buttonElement!)
+    ripple = MDCRipple.attachTo(buttonElement!)
+  })
+  onCleanup(() => {
+    ripple?.destroy()
   })
   return (
     <button

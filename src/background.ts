@@ -1,4 +1,4 @@
-import { Command, Port, uninstallURL } from "./utils/constants";
+import { Command, Port } from "./utils/constants";
 import {
   closePopup,
   demoSettings,
@@ -51,13 +51,8 @@ function initListeners() {
   chrome.runtime.onConnect.addListener(handleConnection);
   chrome.commands.onCommand.addListener(handleCommand);
   chrome.runtime.onMessage.addListener(handleMessage(messageHandlers()));
-  if (PRODUCTION) {
-    initForProduction();
-  }
-}
-
-function initForProduction() {
-  chrome.runtime.setUninstallURL(uninstallURL);
+  // Clear the legacy redirect for installations that registered it previously.
+  chrome.runtime.setUninstallURL("");
 }
 
 async function switchToPreviousTab() {
@@ -235,7 +230,10 @@ function messageHandlers(): Partial<IHandlers> {
       return {
         tabs: tabs as chrome.tabs.Tab[],
         settings,
-        zoomFactor: await chrome.tabs.getZoom(),
+        zoomFactor:
+          sender.tab?.id !== undefined
+            ? await chrome.tabs.getZoom(sender.tab.id)
+            : await chrome.tabs.getZoom(),
         pinnedTabIds: registry.getPinnedTabIds(),
         activeTabId: activeTab?.id,
         previousTabId: previousTab?.id,
@@ -291,7 +289,7 @@ async function activateTab({ id, windowId }: ChromeTab) {
     // To handle this situation without an error we can use debounce technique.
     // @ts-expect-error Todo: fix this
     await chrome.tabs.update(id, { active: true });
-    if (isBrowserFocused()) {
+    if (await isBrowserFocused()) {
       await chrome.windows.update(windowId, { focused: true });
     }
   } catch (e) {

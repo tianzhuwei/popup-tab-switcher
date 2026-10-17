@@ -27,7 +27,7 @@ export function Popup({ element }: IProps) {
     store,
     syncStoreWithBackground,
     openPopup,
-    closePopup,
+    closePopup: closeStorePopup,
     selectNextTab,
     selectTabIndex,
     togglePin,
@@ -49,6 +49,8 @@ export function Popup({ element }: IProps) {
   let popupTransition = 0;
   let closeWithoutAnimation = false;
   let isDisposed = false;
+  let popupRequestGeneration = 0;
+  let pendingPopupRequests = Promise.resolve();
   // Stores the last active element before the popup was opened.
   const selectionAndFocus = new SelectionAndFocus();
   let cleanUpListeners = () => {};
@@ -85,6 +87,8 @@ export function Popup({ element }: IProps) {
   onCleanup(() => {
     log(`[stop switcher]`);
     isDisposed = true;
+    popupRequestGeneration += 1;
+    pendingPopupRequests = Promise.resolve();
     popupTransition += 1;
     cancelPopupAnimation();
     cancelRowAnimations();
@@ -318,6 +322,9 @@ export function Popup({ element }: IProps) {
   }
 
   function updateOverlayVisibility(isOpen: boolean) {
+    if (isDisposed) {
+      return;
+    }
     const transition = ++popupTransition;
     if (isOpen) {
       selectionAndFocus.saveState();
@@ -442,10 +449,59 @@ export function Popup({ element }: IProps) {
   }
 
   async function onWindowResize() {
-    if (store.isOpen) {
-      await syncStoreWithBackground();
-      setStylePropertiesThatDependOnPageZoom();
+    const generation = popupRequestGeneration;
+    const isCurrent = () =>
+      !isDisposed && generation === popupRequestGeneration && store.isOpen;
+    if (isCurrent()) {
+      await syncStoreWithBackground(isCurrent);
+      if (isCurrent()) {
+        setStylePropertiesThatDependOnPageZoom();
+      }
     }
+  }
+
+  function closePopup() {
+    // Invalidate the whole opening cycle, including requests still waiting to sync.
+    popupRequestGeneration += 1;
+    pendingPopupRequests = Promise.resolve();
+    if (!isDisposed) {
+      closeStorePopup();
+    }
+  }
+
+  function requestPopup(increment?: number) {
+    const generation = popupRequestGeneration;
+    const isCurrent = () =>
+      !isDisposed && generation === popupRequestGeneration;
+    // Preserve every repeat in arrival order, rather than replacing earlier requests.
+    const request = pendingPopupRequests.then(async () => {
+      if (!isCurrent()) {
+        return;
+      }
+      const model = await syncStoreWithBackground(isCurrent);
+      if (!model || !isCurrent()) {
+        return;
+      }
+      if (increment !== undefined) {
+        if (store.isOpen) {
+          selectNextTab(increment);
+        } else if (
+          model.settings.isSwitchingToPreviouslyUsedTab &&
+          model.previousTabId !== undefined
+        ) {
+          const previousTabIndex = model.tabs.findIndex(
+            (tab) => tab.id === model.previousTabId
+          );
+          if (previousTabIndex !== -1) {
+            selectTabIndex(previousTabIndex);
+          }
+        }
+      }
+      openPopup();
+    });
+    // A failed request must not prevent later shortcuts from being processed.
+    pendingPopupRequests = request.catch(() => {});
+    return request;
   }
 
   function switchTo(selectedTab: ITab) {
@@ -468,29 +524,12 @@ export function Popup({ element }: IProps) {
     window.addEventListener("resize", onWindowResize, { capture: true });
 
     const messageListener = handleMessage({
-      [Message.DEMO_SETTINGS]: async () => {
+      [Message.DEMO_SETTINGS]: () => {
         isSettingsDemo = true;
-        await syncStoreWithBackground();
-        openPopup();
+        return requestPopup();
       },
       [Message.CLOSE_POPUP]: closePopup,
-      [Message.SELECT_TAB]: async ({ increment }) => {
-        const model = await syncStoreWithBackground();
-        if (store.isOpen) {
-          selectNextTab(increment);
-        } else if (
-          model.settings.isSwitchingToPreviouslyUsedTab &&
-          model.previousTabId !== undefined
-        ) {
-          const previousTabIndex = model.tabs.findIndex(
-            (tab) => tab.id === model.previousTabId
-          );
-          if (previousTabIndex !== -1) {
-            selectTabIndex(previousTabIndex);
-          }
-        }
-        openPopup();
-      },
+      [Message.SELECT_TAB]: ({ increment }) => requestPopup(increment),
     });
     chrome.runtime.onMessage.addListener(messageListener);
 
@@ -520,7 +559,13 @@ export function Popup({ element }: IProps) {
 
   function onKeyDown(event: KeyboardEvent) {
     log(`[onKeyDown event]`, event);
+    if (isDisposed) {
+      return;
+    }
     if (!store.isOpen) {
+      if (event.key === "Escape") {
+        closePopup();
+      }
       return;
     }
     const handlers: { [key: string]: () => void } = {
@@ -604,6 +649,9 @@ export function Popup({ element }: IProps) {
 
   function resetMouseIdleTimeout() {
     clearMouseIdleTimeout();
+    if (isDisposed || !store.isOpen) {
+      return;
+    }
     mouseIdleTimeout = window.setTimeout(() => {
       if (isMouseOverCard && store.isOpen && !store.settings.isStayingOpen) {
         closePopup();
@@ -643,7 +691,9 @@ export function Popup({ element }: IProps) {
     };
 
     function restoreFocus() {
-      pdfElement?.focus();
+      if (!isDisposed) {
+        pdfElement?.focus();
+      }
     }
   }
 }

@@ -173,7 +173,12 @@ export default class TabRegistry {
    * [0,1,2,3,4] -(active 2)-> [0,1,3,4,2]
    * */
   setActive(tabId: number) {
-    this.tabs.sort((_a, b) => (b.id === tabId ? -1 : 0))
+    const index = this.tabs.findIndex((tab) => tab.id === tabId)
+    if (index === -1) {
+      return
+    }
+    const [tab] = this.tabs.splice(index, 1)
+    this.tabs.push(tab)
     this.onUpdate(this.tabs)
   }
 

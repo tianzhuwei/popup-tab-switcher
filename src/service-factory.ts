@@ -4,6 +4,12 @@ import {checkTab, ITab} from './utils/check-tab'
 import {TabRegistryFactory} from './utils/tab-registry-factory'
 import {log} from './utils/logger'
 
+interface ISavedRegistryState {
+  tabs: ITab[]
+  pinnedTabIds: number[]
+  isSameSession: boolean
+}
+
 export class ServiceFactory {
   private static settingsCache: ISettingsService | undefined
 
@@ -29,17 +35,29 @@ export class ServiceFactory {
       ServiceFactory.registryInitialization = Promise.all([
         ServiceFactory.getSettings(),
         getOpenTabs(),
-        getSavedTabs(),
-        getSavedPinnedTabIds(),
-      ]).then(([settings, openTabs, savedTabs, pinnedTabIds]) => {
+        getSavedRegistryState(),
+      ]).then(async ([settings, openTabs, savedState]) => {
+        const {tabs: savedTabs, pinnedTabIds, isSameSession} = savedState
         const registry = TabRegistryFactory.create({
           numberOfTabsToShow: settings.numberOfTabsToShow,
           openTabs,
           savedTabs,
           pinnedTabIds,
+          isSameSession,
           onTabsUpdate: saveTabs,
           onPinnedUpdate: savePinnedTabIds,
         })
+        // Save both sides of the remapping before marking this browser session.
+        // Storage write failures must not prevent using the in-memory registry.
+        try {
+          await chrome.storage.local.set({
+            tabs: registry.getTabs(),
+            pinnedTabIds: registry.getPinnedTabIds(),
+          })
+          await chrome.storage.session?.set({tabRegistryInitialized: true})
+        } catch (error) {
+          log('[Registry persistence failed]', error)
+        }
         ServiceFactory.registryCache = registry
         log(`[Registry initialized]`, {
           openTabs,
@@ -56,18 +74,20 @@ export class ServiceFactory {
   }
 }
 
-async function getSavedTabs(): Promise<ITab[]> {
-  const {tabs} = await chrome.storage.local.get('tabs')
-  return tabs || []
+async function getSavedRegistryState(): Promise<ISavedRegistryState> {
+  const [saved, session] = await Promise.all([
+    chrome.storage.local.get(['tabs', 'pinnedTabIds']),
+    chrome.storage.session?.get('tabRegistryInitialized'),
+  ])
+  return {
+    tabs: saved.tabs || [],
+    pinnedTabIds: saved.pinnedTabIds || [],
+    isSameSession: session?.tabRegistryInitialized === true,
+  }
 }
 
 function saveTabs(tabs: ITab[]): void {
   chrome.storage.local.set({tabs})
-}
-
-async function getSavedPinnedTabIds(): Promise<number[]> {
-  const {pinnedTabIds} = await chrome.storage.local.get('pinnedTabIds')
-  return pinnedTabIds || []
 }
 
 function savePinnedTabIds(pinnedTabIds: number[]): void {

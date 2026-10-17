@@ -6,6 +6,7 @@ interface ITabRegistryFactoryParams {
   savedTabs: ITab[]
   numberOfTabsToShow: number
   pinnedTabIds?: number[]
+  isSameSession?: boolean
   onTabsUpdate?: (tabs: ITab[]) => void
   onPinnedUpdate?: (pinnedTabIds: number[]) => void
 }
@@ -19,7 +20,8 @@ export class TabRegistryFactory {
     numberOfTabsToShow,
     openTabs,
     savedTabs,
-    pinnedTabIds,
+    pinnedTabIds = [],
+    isSameSession = false,
     onTabsUpdate,
     onPinnedUpdate,
   }: ITabRegistryFactoryParams): TabRegistry {
@@ -27,7 +29,12 @@ export class TabRegistryFactory {
     return new TabRegistry({
       tabs,
       numberOfTabsToShow,
-      pinnedTabIds,
+      pinnedTabIds: TabRegistryFactory.restorePinnedTabIds(
+        openTabs,
+        savedTabs,
+        pinnedTabIds,
+        isSameSession
+      ),
       onUpdate: onTabsUpdate,
       onPinnedUpdate,
     })
@@ -42,6 +49,39 @@ export class TabRegistryFactory {
     )
     this.moveActiveTabToTheEnd(openTabsWithCreationOrder)
     return openTabsWithCreationOrder
+  }
+
+  private static restorePinnedTabIds(
+    openTabs: ITab[],
+    savedTabs: ITab[],
+    pinnedTabIds: number[],
+    isSameSession: boolean
+  ): number[] {
+    if (isSameSession) {
+      const openTabIds = new Set(openTabs.map((tab) => tab.id))
+      return pinnedTabIds.filter((id) => openTabIds.has(id))
+    }
+
+    const openTabsWithCreationOrder = this.getTabsWithCreationOrder(openTabs)
+    const savedTabsWithCreationOrder = this.getTabsWithCreationOrder(savedTabs)
+    const restoredIds = new Set<number>()
+    for (const id of pinnedTabIds) {
+      const savedTab = savedTabsWithCreationOrder.find((tab) => tab.id === id)
+      if (!savedTab?.url) {
+        continue
+      }
+      const openCount = openTabs.filter((tab) => tab.url === savedTab.url).length
+      const savedCount = savedTabs.filter((tab) => tab.url === savedTab.url).length
+      // A missing duplicate changes its siblings' creation order. Do not guess.
+      if (openCount !== savedCount) {
+        continue
+      }
+      const index = this.getSimilarTabIndex(openTabsWithCreationOrder, savedTab)
+      if (index > -1) {
+        restoredIds.add(openTabsWithCreationOrder[index].id)
+      }
+    }
+    return Array.from(restoredIds)
   }
 
   /**

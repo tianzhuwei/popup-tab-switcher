@@ -1,9 +1,4 @@
-let isFocused = false
-chrome.windows.onFocusChanged.addListener(async () => {
+export async function isBrowserFocused(): Promise<boolean> {
   const lastFocused = await chrome.windows.getLastFocused()
-  isFocused = lastFocused.focused
-})
-
-export function isBrowserFocused() {
-  return isFocused
+  return lastFocused.focused
 }

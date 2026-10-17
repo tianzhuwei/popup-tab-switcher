@@ -36,8 +36,11 @@ export function createPopupStore() {
     setStore("isOpen", true);
   };
 
-  const syncStoreWithBackground = async () => {
+  const syncStoreWithBackground = async (isCurrent = () => true) => {
     const model = await sendMessageAndGetResponse(getModel());
+    if (!isCurrent()) {
+      return;
+    }
     log(`[syncStoreWithBackground model]`, model);
     setStore({
       zoomFactor: model.zoomFactor,
