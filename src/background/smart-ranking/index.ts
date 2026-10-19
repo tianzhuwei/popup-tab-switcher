@@ -6,6 +6,7 @@ import {
   ISmartRankingConfig,
   ISmartRankingSettings,
   ISmartRankingStatus,
+  isValidRankingProbabilitySum,
   normalizeSmartRankingConfig,
   normalizeSmartRankingProviders,
 } from "../../utils/smart-ranking";
@@ -180,12 +181,7 @@ function initialize(): Promise<void> {
                 probability >= 0 &&
                 probability <= 1
             ) &&
-            Math.abs(
-              Object.values(value.probabilities).reduce<number>(
-                (sum, probability) => sum + (probability as number),
-                0
-              ) - 1
-            ) <= 0.001
+            isValidRankingProbabilitySum(value.probabilities, config.provider)
           )
             cache.set(key, value);
         }

@@ -107,6 +107,24 @@ export function normalizeSmartRankingProviders(
   return providers;
 }
 
+export function isValidRankingProbabilitySum(
+  probabilities: Record<string, number>,
+  provider: RankingProvider
+): boolean {
+  const values = Object.values(probabilities);
+  const sum = values.reduce((total, value) => total + value, 0);
+  // Bailian can round each probability to two decimals, accumulating up to 0.005 per option.
+  const isRoundedBailianResponse =
+    provider === "bailian" &&
+    values.every(
+      (value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-8
+    );
+  const tolerance = isRoundedBailianResponse
+    ? Math.max(0.001, values.length * 0.005)
+    : 0.001;
+  return sum > 0 && Math.abs(sum - 1) <= tolerance + 1e-8;
+}
+
 export function getRankingPermissionOrigin(
   config: ISmartRankingConfig
 ): string {

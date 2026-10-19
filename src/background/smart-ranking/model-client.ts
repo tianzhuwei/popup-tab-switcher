@@ -1,6 +1,8 @@
 import {
   getRankingPermissionOrigin,
   ISmartRankingConfig,
+  isValidRankingProbabilitySum,
+  RankingProvider,
 } from "../../utils/smart-ranking";
 
 interface IRankingResponse {
@@ -116,12 +118,13 @@ export async function requestTabRanking(
   } catch {
     throw invalidResponse();
   }
-  return parseRankingResponse(result, Object.keys(choices));
+  return parseRankingResponse(result, Object.keys(choices), config.provider);
 }
 
 function parseRankingResponse(
   result: unknown,
-  candidates: string[]
+  candidates: string[],
+  provider: RankingProvider
 ): IRankingResponse {
   if (
     !isRecord(result) ||
@@ -144,7 +147,6 @@ function parseRankingResponse(
     throw invalidResponse();
   }
   const probabilities: Record<string, number> = {};
-  let sum = 0;
   for (const candidate of candidates) {
     const probability = answer.probabilities[candidate];
     if (
@@ -159,9 +161,8 @@ function parseRankingResponse(
       configurable: true,
       writable: true,
     });
-    sum += probability;
   }
-  if (Math.abs(sum - 1) > 0.001) {
+  if (!isValidRankingProbabilitySum(probabilities, provider)) {
     throw invalidResponse();
   }
   return { probabilities, confidence: answer.confidence };
