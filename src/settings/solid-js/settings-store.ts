@@ -32,20 +32,22 @@ export function createSettingsStore({
   settingsService,
   initialSettings,
   areShortcutsEnabled,
-  isShortcutsBannerVisible,
+  isShortcutsBannerVisible
 }: ISettingsStoreProps): ISettingsStore {
   const [store, setStore] = createStore<ISettingsStoreObject>({
     settings: initialSettings, // Store can work only with plain objects.
     isKeyboardShortcutsEnabled: areShortcutsEnabled,
-    isShortcutsBannerVisible,
+    isShortcutsBannerVisible
   })
+  let settingsQueue = Promise.resolve()
+  let settingsRevision = 0
 
   return {
     restoreDefaultSettings,
     setKeyboardShortcutsEnabled,
     setShortcutsBannerVisible,
     setSettingsOptions,
-    store,
+    store
   }
 
   function setKeyboardShortcutsEnabled(enabled: boolean) {
@@ -57,13 +59,22 @@ export function createSettingsStore({
   }
 
   function setSettingsOptions(options: Partial<ISettings>) {
-    settingsService.update(options).then(() => {
-      setStore('settings', options)
-    })
+    enqueueSettingsChange(() => settingsService.update(options))
   }
 
-  async function restoreDefaultSettings() {
-    await settingsService.reset()
-    setStore('settings', await settingsService.getSettingsObject())
+  function restoreDefaultSettings() {
+    return enqueueSettingsChange(() => settingsService.reset())
+  }
+
+  function enqueueSettingsChange(change: () => Promise<void>): Promise<void> {
+    const revision = ++settingsRevision
+    const next = settingsQueue.then(async () => {
+      await change()
+      if (revision !== settingsRevision) return
+      const settings = await settingsService.getSettingsObject()
+      if (revision === settingsRevision) setStore('settings', settings)
+    })
+    settingsQueue = next.catch(() => {})
+    return next
   }
 }

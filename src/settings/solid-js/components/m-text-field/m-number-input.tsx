@@ -1,4 +1,4 @@
-import {Show} from 'solid-js'
+import {createEffect, createSignal, Show} from 'solid-js'
 import styles from './m-text-field.module.scss'
 
 interface IProps {
@@ -8,13 +8,19 @@ interface IProps {
   suffix?: string
   min?: number
   max?: number
+  integer?: boolean
 }
 
 export function MNumberInput(props: IProps) {
-  let previousValue = props.value
-  const min = props.min ? props.min : 0
-  const max = props.max ? props.max : 10000
+  const [draft, setDraft] = createSignal(String(props.value))
+  const [isEditing, setEditing] = createSignal(false)
+  const min = () => props.min ?? 0
+  const max = () => props.max ?? 10000
   let inputElement: HTMLInputElement
+  createEffect(() => {
+    const value = props.value
+    if (!isEditing()) setDraft(String(value))
+  })
   return (
     <div class={styles.field}>
       <input
@@ -23,14 +29,28 @@ export function MNumberInput(props: IProps) {
         id={props.id}
         type="number"
         name={props.id}
-        min={min}
-        max={max}
-        value={props.value}
+        min={min()}
+        max={max()}
+        step={props.integer ? 1 : 'any'}
+        value={draft()}
+        onFocus={() => setEditing(true)}
         onInput={() => {
-          const value = normalizeValue(inputElement.value, previousValue, min, max)
-          previousValue = value
-          props.onInput(value)
-          inputElement.value = value.toString()
+          setDraft(inputElement.value)
+          const value = inputElement.valueAsNumber
+          if (
+            Number.isFinite(value) &&
+            value >= min() &&
+            value <= max() &&
+            (!props.integer || Number.isInteger(value))
+          )
+            props.onInput(value)
+        }}
+        onBlur={commitDraft}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            inputElement.blur()
+          }
         }}
       />
       <Show when={props.suffix}>
@@ -42,24 +62,16 @@ export function MNumberInput(props: IProps) {
       </div>
     </div>
   )
-}
 
-/**
- * Parses a number from a string and normalizes it to be within the given range.
- */
-function normalizeValue(value: string, previousValue: number, min: number, max: number): number {
-  if (!value) {
-    return min
+  function commitDraft() {
+    const parsed = inputElement.valueAsNumber
+    const value = Number.isFinite(parsed) ? parsed : props.value
+    const normalized = Math.min(
+      max(),
+      Math.max(min(), props.integer ? Math.round(value) : value)
+    )
+    if (normalized !== props.value) props.onInput(normalized)
+    setEditing(false)
+    setDraft(String(normalized))
   }
-  const parsed = Number(value)
-  if (Number.isNaN(parsed)) {
-    return previousValue
-  }
-  if (parsed < min) {
-    return min
-  }
-  if (parsed > max) {
-    return previousValue
-  }
-  return parsed
 }

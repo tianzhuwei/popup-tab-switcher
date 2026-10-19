@@ -27,6 +27,7 @@
 .overlay {
   all: initial; // prevent leaking of inherited styles from the :host
   direction: ltr;
+  position: relative;
   display: flex;
   height: 100%;
   align-items: center;

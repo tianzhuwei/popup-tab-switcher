@@ -1,6 +1,7 @@
 type LocalStorageArea = chrome.storage.LocalStorageArea;
 
 export type ThemeMode = "auto" | "light" | "dark";
+export type PopupPosition = "center" | "mouse";
 
 export interface ISettings {
   textScrollDelay: number;
@@ -9,6 +10,7 @@ export interface ISettings {
   themeMode: ThemeMode;
   isVisualEffectsEnabled: boolean;
   popupWidth: number;
+  popupPosition: PopupPosition;
   tabHeight: number;
   fontSize: number;
   iconSize: number;
@@ -26,7 +28,8 @@ export const defaultSettings: ISettings = {
   themeMode: "auto",
   isVisualEffectsEnabled: false,
   popupWidth: 420,
-  tabHeight: 40,
+  popupPosition: "center",
+  tabHeight: 46,
   fontSize: 16,
   iconSize: 24,
   opacity: 100,
@@ -35,6 +38,56 @@ export const defaultSettings: ISettings = {
   isHoverSelectingTab: false,
   isShowingTabsFromAllWindows: true,
 };
+
+export function getMinimumTabHeight(
+  settings: Pick<ISettings, "fontSize" | "iconSize">
+): number {
+  return Math.ceil(
+    Math.max(46, settings.fontSize * 1.8 + 12, settings.iconSize + 16)
+  );
+}
+
+function normalizeSettings(settings: ISettings): void {
+  function normalizeNumber(
+    key:
+      | "textScrollDelay"
+      | "textScrollSpeed"
+      | "numberOfTabsToShow"
+      | "popupWidth"
+      | "tabHeight"
+      | "fontSize"
+      | "iconSize"
+      | "opacity",
+    min: number,
+    max = 10000,
+    integer = false
+  ) {
+    const value = Number.isFinite(settings[key])
+      ? settings[key]
+      : defaultSettings[key];
+    settings[key] = Math.min(
+      max,
+      Math.max(min, integer ? Math.round(value) : value)
+    );
+  }
+
+  normalizeNumber("textScrollDelay", 0);
+  normalizeNumber("textScrollSpeed", 0, 100);
+  normalizeNumber("numberOfTabsToShow", 0, 10000, true);
+  normalizeNumber("popupWidth", 200);
+  normalizeNumber("fontSize", 8);
+  normalizeNumber("iconSize", 8);
+  normalizeNumber("opacity", 0, 100);
+  const minimumTabHeight = getMinimumTabHeight(settings);
+  normalizeNumber(
+    "tabHeight",
+    minimumTabHeight,
+    Math.max(10000, minimumTabHeight)
+  );
+  if (settings.popupPosition !== "mouse") {
+    settings.popupPosition = "center";
+  }
+}
 
 /**
  * Migrates the legacy `isDarkTheme` boolean to the new `themeMode` field.
@@ -63,10 +116,22 @@ export async function getSettings(
     ...stored,
   };
   migrateThemeMode(merged);
+  const beforeNormalization = { ...merged };
+  normalizeSettings(merged);
+  if (
+    Object.keys(merged).some(
+      (key) =>
+        merged[key as keyof ISettings] !==
+        beforeNormalization[key as keyof ISettings]
+    )
+  ) {
+    await storage.set({ settings: merged });
+  }
   return {
     ...merged,
     async update(this: ISettingsService, newSettings: Partial<ISettings>) {
       Object.assign(this, newSettings);
+      normalizeSettings(this);
       await storage.set({ settings: this.getSettingsObject() });
     },
     async reset() {
@@ -81,6 +146,7 @@ export async function getSettings(
         themeMode: this.themeMode,
         isVisualEffectsEnabled: this.isVisualEffectsEnabled,
         popupWidth: this.popupWidth,
+        popupPosition: this.popupPosition,
         tabHeight: this.tabHeight,
         fontSize: this.fontSize,
         iconSize: this.iconSize,

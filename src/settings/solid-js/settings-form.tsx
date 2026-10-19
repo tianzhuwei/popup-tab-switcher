@@ -4,7 +4,12 @@ import { ISettingsStoreObject } from "./settings-store";
 import { MBanner } from "./components/m-banner/m-banner";
 import styles from "./settings.module.scss";
 import { MSwitch } from "./components/m-switch";
-import { ISettings, ThemeMode } from "../../utils/settings";
+import {
+  getMinimumTabHeight,
+  ISettings,
+  PopupPosition,
+  ThemeMode,
+} from "../../utils/settings";
 import { MNumberInput } from "./components/m-text-field/m-number-input";
 
 interface IProps {
@@ -26,6 +31,12 @@ const themeOptions: IThemeOption[] = [
   { value: "light", label: "Light", icon: "wb_sunny" },
   { value: "dark", label: "Dark", icon: "nights_stay" },
 ];
+
+const positionOptions: { value: PopupPosition; label: string; icon: string }[] =
+  [
+    { value: "center", label: "Center", icon: "filter_center_focus" },
+    { value: "mouse", label: "Near mouse", icon: "mouse" },
+  ];
 
 /**
  * A collapsible section that groups related settings under a header row.
@@ -217,6 +228,37 @@ export function SettingsForm(props: IProps) {
           />
         </Row>
         <Row>
+          <span class={styles.settings__label}>
+            <i class={styles.iconInLabel}>open_with</i>
+            Popup position
+          </span>
+        </Row>
+        <div
+          class={`${styles.settings__row} ${styles.settings__row_segmented}`}
+        >
+          <div class={styles.segmented}>
+            <For each={positionOptions}>
+              {(option) => (
+                <button
+                  type="button"
+                  class={styles.segmented__option}
+                  classList={{
+                    [styles.segmented__option_active]:
+                      props.store.settings.popupPosition === option.value,
+                  }}
+                  title={option.label}
+                  onClick={() => {
+                    props.setSettingsOptions({ popupPosition: option.value });
+                  }}
+                >
+                  <i class={styles.segmented__icon}>{option.icon}</i>
+                  {option.label}
+                </button>
+              )}
+            </For>
+          </div>
+        </div>
+        <Row>
           <label for="popupWidth" class={styles.settings__label}>
             <i class={styles.iconInLabel}>border_horizontal</i>
             Popup width
@@ -224,6 +266,7 @@ export function SettingsForm(props: IProps) {
           <MNumberInput
             id="popupWidth"
             suffix="px"
+            min={200}
             value={props.store.settings.popupWidth}
             onInput={(value) => {
               props.setSettingsOptions({ popupWidth: value });
@@ -239,6 +282,8 @@ export function SettingsForm(props: IProps) {
             id="tabHeight"
             suffix="px"
             value={props.store.settings.tabHeight}
+            min={getMinimumTabHeight(props.store.settings)}
+            max={Math.max(10000, getMinimumTabHeight(props.store.settings))}
             onInput={(value) => {
               props.setSettingsOptions({ tabHeight: value });
             }}
@@ -252,6 +297,7 @@ export function SettingsForm(props: IProps) {
           <MNumberInput
             id="numberOfTabsToShow"
             value={props.store.settings.numberOfTabsToShow}
+            integer={true}
             onInput={(value) => {
               props.setSettingsOptions({ numberOfTabsToShow: value });
             }}
@@ -266,6 +312,7 @@ export function SettingsForm(props: IProps) {
             id="fontSize"
             suffix="px"
             value={props.store.settings.fontSize}
+            min={8}
             onInput={(value) => {
               props.setSettingsOptions({ fontSize: value });
             }}
@@ -280,6 +327,7 @@ export function SettingsForm(props: IProps) {
             id="iconSize"
             suffix="px"
             value={props.store.settings.iconSize}
+            min={8}
             onInput={(value) => {
               props.setSettingsOptions({ iconSize: value });
             }}

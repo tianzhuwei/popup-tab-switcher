@@ -15,6 +15,7 @@ import { PopupTab } from "./popup-tab";
 import uuid from "../utils/uuid";
 import { SelectionAndFocus } from "./selection-and-focus";
 import { createThemeMode } from "../utils/use-theme-mode";
+import { getMinimumTabHeight } from "../utils/settings";
 
 type ITab = chrome.tabs.Tab;
 
@@ -34,7 +35,7 @@ function Popup({ element }: IProps) {
     isPinned,
     removeTab,
   } = createPopupStore();
-  // Prevents auto switching when the popup is opened.
+  // Settings previews stay open when focus moves back to the settings panel.
   let isSettingsDemo = false;
   // Resolves the effective theme (auto follows the OS, or a manual choice).
   const isDark = createThemeMode(() => store.settings.themeMode);
@@ -61,6 +62,10 @@ function Popup({ element }: IProps) {
   const MOUSE_IDLE_DURATION = 3000;
   let suppressAutoCloseUntil = 0;
   let prevTabRects: Map<number, DOMRect> | null = null;
+  let mousePosition: { x: number; y: number } | undefined;
+  let popupAnchor: { x: number; y: number } | undefined;
+  let cardPosition: { left: number; top: number } | undefined;
+  let isHoverSelectionReady = true;
 
   function snapshotTabPositions() {
     if (!isMotionEnabled()) {
@@ -193,7 +198,10 @@ function Popup({ element }: IProps) {
                       togglePin(tab.id!);
                     }}
                     onHover={() => {
-                      if (store.settings.isHoverSelectingTab) {
+                      if (
+                        store.settings.isHoverSelectingTab &&
+                        isHoverSelectionReady
+                      ) {
                         selectTabIndex(index());
                       }
                     }}
@@ -268,12 +276,7 @@ function Popup({ element }: IProps) {
     const { fontSize, numberOfTabsToShow, tabHeight, popupWidth, iconSize } =
       store.settings;
     const zoomFactor = store.zoomFactor;
-    const rowHeight = Math.max(
-      tabHeight,
-      46,
-      fontSize * 1.8 + 12,
-      iconSize + 16
-    );
+    const rowHeight = Math.max(tabHeight, getMinimumTabHeight(store.settings));
     const visibleTabCount =
       numberOfTabsToShow > 0
         ? numberOfTabsToShow
@@ -318,6 +321,57 @@ function Popup({ element }: IProps) {
       `${store.settings.opacity / 100}`
     );
     setStylePropertiesThatDependOnPageZoom();
+    const transition = popupTransition;
+    queueMicrotask(() => {
+      if (!isDisposed && store.isOpen && transition === popupTransition) {
+        updatePopupPosition();
+      }
+    });
+  }
+
+  function updatePopupPosition() {
+    const card = element.shadowRoot?.querySelector<HTMLElement>(".card");
+    if (!card) {
+      return;
+    }
+    if (store.settings.popupPosition !== "mouse" || !popupAnchor) {
+      card.style.removeProperty("position");
+      card.style.removeProperty("left");
+      card.style.removeProperty("top");
+      cardPosition = undefined;
+      return;
+    }
+    const margin = 20 / store.zoomFactor;
+    const gap = 12 / store.zoomFactor;
+    const width = card.offsetWidth;
+    const height = card.offsetHeight;
+    if (!cardPosition) {
+      const selectedTab = card.querySelector<HTMLElement>(".tab_selected");
+      const cardRect = card.getBoundingClientRect();
+      const selectedRect = selectedTab?.getBoundingClientRect();
+      const rowOffset = selectedRect
+        ? selectedRect.top - cardRect.top + selectedRect.height / 2
+        : height / 2;
+      cardPosition = {
+        left:
+          popupAnchor.x + gap + width <= window.innerWidth - margin
+            ? popupAnchor.x + gap
+            : popupAnchor.x - gap - width,
+        top: popupAnchor.y - rowOffset,
+      };
+    }
+    // Keep this opening's position stable as the selection and pointer move.
+    cardPosition.left = Math.max(
+      margin,
+      Math.min(cardPosition.left, window.innerWidth - width - margin)
+    );
+    cardPosition.top = Math.max(
+      margin,
+      Math.min(cardPosition.top, window.innerHeight - height - margin)
+    );
+    card.style.position = "absolute";
+    card.style.left = `${cardPosition.left}px`;
+    card.style.top = `${cardPosition.top}px`;
   }
 
   function updateOverlayVisibility(isOpen: boolean) {
@@ -329,6 +383,19 @@ function Popup({ element }: IProps) {
       selectionAndFocus.saveState();
       cancelPopupAnimation();
       closeWithoutAnimation = false;
+      popupAnchor =
+        store.settings.popupPosition === "mouse" &&
+        mousePosition &&
+        document.hasFocus() &&
+        !document.pointerLockElement &&
+        mousePosition.x >= 0 &&
+        mousePosition.x < window.innerWidth &&
+        mousePosition.y >= 0 &&
+        mousePosition.y < window.innerHeight
+          ? { ...mousePosition }
+          : undefined;
+      cardPosition = undefined;
+      isHoverSelectionReady = !popupAnchor;
       showOverlay();
       setIsVisible(true);
       // Wait for the card to mount, without replaying entrance on selection changes.
@@ -455,6 +522,7 @@ function Popup({ element }: IProps) {
       await syncStoreWithBackground(isCurrent);
       if (isCurrent()) {
         setStylePropertiesThatDependOnPageZoom();
+        updatePopupPosition();
       }
     }
   }
@@ -463,6 +531,7 @@ function Popup({ element }: IProps) {
     // Invalidate the whole opening cycle, including requests still waiting to sync.
     popupRequestGeneration += 1;
     pendingPopupRequests = Promise.resolve();
+    isSettingsDemo = false;
     if (!isDisposed) {
       closeStorePopup();
     }
@@ -477,6 +546,7 @@ function Popup({ element }: IProps) {
       if (!isCurrent()) {
         return;
       }
+      isSettingsDemo = increment === undefined;
       const model = await syncStoreWithBackground(isCurrent);
       if (!model || !isCurrent()) {
         return;
@@ -521,12 +591,15 @@ function Popup({ element }: IProps) {
     window.addEventListener("keydown", onKeyDown, { capture: true });
     window.addEventListener("blur", onWindowBlur, { capture: true });
     window.addEventListener("resize", onWindowResize, { capture: true });
+    window.addEventListener("pointermove", onPointerMove, {
+      capture: true,
+      passive: true,
+    });
+    window.addEventListener("pointerout", onPointerOut, { capture: true });
+    document.addEventListener("visibilitychange", clearMousePosition);
 
     const messageListener = handleMessage({
-      [Message.DEMO_SETTINGS]: () => {
-        isSettingsDemo = true;
-        return requestPopup();
-      },
+      [Message.DEMO_SETTINGS]: () => requestPopup(),
       [Message.CLOSE_POPUP]: closePopup,
       [Message.SELECT_TAB]: ({ increment }) => requestPopup(increment),
     });
@@ -541,9 +614,53 @@ function Popup({ element }: IProps) {
       window.removeEventListener("keydown", onKeyDown, { capture: true });
       window.removeEventListener("blur", onWindowBlur, { capture: true });
       window.removeEventListener("resize", onWindowResize, { capture: true });
+      window.removeEventListener("pointermove", onPointerMove, {
+        capture: true,
+      });
+      window.removeEventListener("pointerout", onPointerOut, { capture: true });
+      document.removeEventListener("visibilitychange", clearMousePosition);
       chrome.runtime.onMessage.removeListener(messageListener);
       disposeFixUnfocusedDocumentInPdfFiles();
     };
+  }
+
+  function onPointerMove(event: PointerEvent) {
+    if (!event.isTrusted) {
+      return;
+    }
+    mousePosition =
+      event.pointerType === "mouse"
+        ? { x: event.clientX, y: event.clientY }
+        : undefined;
+    if (
+      store.isOpen &&
+      !isHoverSelectionReady &&
+      popupAnchor &&
+      mousePosition &&
+      Math.hypot(
+        mousePosition.x - popupAnchor.x,
+        mousePosition.y - popupAnchor.y
+      ) >=
+        2 / store.zoomFactor
+    ) {
+      isHoverSelectionReady = true;
+    }
+  }
+
+  function onPointerOut(event: PointerEvent) {
+    const nextTarget = event.relatedTarget;
+    if (
+      !nextTarget ||
+      nextTarget instanceof HTMLIFrameElement ||
+      nextTarget instanceof HTMLEmbedElement ||
+      nextTarget instanceof HTMLObjectElement
+    ) {
+      clearMousePosition();
+    }
+  }
+
+  function clearMousePosition() {
+    mousePosition = undefined;
   }
 
   function onOverlayClick(event: MouseEvent) {
@@ -612,7 +729,11 @@ function Popup({ element }: IProps) {
   }
 
   function onWindowBlur(event: Event): void {
-    if (event.target !== window || isSettingsDemo) {
+    if (event.target !== window) {
+      return;
+    }
+    clearMousePosition();
+    if (isSettingsDemo) {
       return;
     }
     if (Date.now() < suppressAutoCloseUntil) {
