@@ -8,13 +8,17 @@
   </head>
   <body>
     <section class="preview" aria-label="Selected tab preview">
-      <header class="preview__header">
-        <div class="preview__title"></div>
-        <div class="preview__url"></div>
-      </header>
-      <div class="preview__content">
-        <img class="preview__image" alt="Selected tab screenshot" hidden />
+      <div class="preview__stage"></div>
+      <div class="preview__placeholder" hidden>
+        <img class="preview__placeholderIcon" alt="" />
+        <div class="preview__placeholderDomain"></div>
+        <div class="preview__placeholderText">No snapshot yet</div>
       </div>
+      <footer class="preview__meta" hidden>
+        <img class="preview__favicon" alt="" />
+        <span class="preview__domain"></span>
+        <span class="preview__time"></span>
+      </footer>
     </section>
   </body>
 </html>

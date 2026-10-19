@@ -7,11 +7,22 @@ interface IProps {
   zoomFactor: number;
   isDark: boolean;
   isEnhanced: boolean;
+  isAnimated: boolean;
   sessionRevision: number;
+}
+
+type IPreviewState = "none" | "empty" | "image";
+
+interface ISize {
+  width: number;
+  height: number;
 }
 
 const CHANNEL = "popup-tab-switcher-preview";
 const SESSION_REFRESH_INTERVAL = 25 * 60 * 1000;
+const DEFAULT_ASPECT_RATIO = 16 / 10;
+// Border (1px) plus inner padding (6px) on each side of the preview frame.
+const FRAME_CHROME = 14;
 
 export function TabPreview(props: IProps) {
   let frame: HTMLIFrameElement;
@@ -20,20 +31,25 @@ export function TabPreview(props: IProps) {
   let sessionPending = false;
   let sessionRefreshRequested = false;
   let ready = false;
-  let hasImage = false;
+  let previewState: IPreviewState = "none";
+  let aspectRatio = DEFAULT_ASPECT_RATIO;
+  let isShown = false;
   let requestId = 0;
   let disposed = false;
   let layoutFrame: number | undefined;
   const origin = `chrome-extension://${chrome.runtime.id}`;
   const resizeObserver = new ResizeObserver(scheduleLayout);
-  let tabList: Element | null = null;
 
   createEffect(
     on(
       () => [props.tab?.id, props.tab?.url],
       () => {
-        clearPreview();
-        publishTarget();
+        // Keep the current content on screen until the next target resolves.
+        if (props.tab?.id === undefined) {
+          clearPreview();
+        } else {
+          publishTarget();
+        }
       }
     )
   );
@@ -47,10 +63,12 @@ export function TabPreview(props: IProps) {
       () => [
         props.isDark,
         props.isEnhanced,
+        props.isAnimated,
         props.zoomFactor,
         props.tab?.title,
       ],
-      publishTarget
+      publishTarget,
+      { defer: true }
     )
   );
 
@@ -59,8 +77,6 @@ export function TabPreview(props: IProps) {
     window.addEventListener("resize", scheduleLayout);
     const card = props.element.shadowRoot?.querySelector(".card");
     if (card) resizeObserver.observe(card);
-    tabList = props.element.shadowRoot?.querySelector(".card__tabs") || null;
-    tabList?.addEventListener("scroll", scheduleLayout, { passive: true });
     requestSession();
   });
 
@@ -69,7 +85,6 @@ export function TabPreview(props: IProps) {
     if (layoutFrame !== undefined) cancelAnimationFrame(layoutFrame);
     window.removeEventListener("message", onFrameMessage);
     window.removeEventListener("resize", scheduleLayout);
-    tabList?.removeEventListener("scroll", scheduleLayout);
     resizeObserver.disconnect();
     clearPreview();
     token = undefined;
@@ -80,7 +95,11 @@ export function TabPreview(props: IProps) {
     <iframe
       ref={frame!}
       class="tab-preview"
-      classList={{ "tab-preview_dark": props.isDark }}
+      classList={{
+        "tab-preview_dark": props.isDark,
+        "tab-preview_enhanced": props.isEnhanced,
+        "tab-preview_animated": props.isAnimated,
+      }}
       src={chrome.runtime.getURL("preview/index.html")}
       title="Selected tab preview"
       tabindex="-1"
@@ -123,10 +142,10 @@ export function TabPreview(props: IProps) {
   }
 
   function clearPreview() {
-    hasImage = false;
+    previewState = "none";
     requestId += 1;
     if (!frame) return;
-    frame.style.visibility = "hidden";
+    setShown(false);
     post({ type: "clear" });
   }
 
@@ -139,21 +158,31 @@ export function TabPreview(props: IProps) {
     )
       return;
     if (event.data.type === "ready") {
-      hasImage = false;
-      frame.style.visibility = "hidden";
+      previewState = "none";
+      setShown(false);
       ready = true;
       publishTarget();
     } else if (
       event.data.type === "preview-state" &&
       event.data.requestId === requestId &&
       event.data.tabId === props.tab?.id &&
-      typeof event.data.available === "boolean"
+      ["none", "empty", "image"].includes(event.data.state)
     ) {
-      hasImage = event.data.available;
-      if (hasImage) {
-        scheduleLayout();
+      previewState = event.data.state;
+      const ratio = event.data.aspectRatio;
+      if (
+        previewState === "image" &&
+        typeof ratio === "number" &&
+        Number.isFinite(ratio) &&
+        ratio > 0
+      ) {
+        // Clamp unusual window shapes so the frame never becomes a sliver.
+        aspectRatio = Math.max(1, Math.min(ratio, 2.4));
+      }
+      if (previewState === "none") {
+        setShown(false);
       } else {
-        frame.style.visibility = "hidden";
+        scheduleLayout();
       }
     }
   }
@@ -174,6 +203,7 @@ export function TabPreview(props: IProps) {
       url: tab.url || tab.pendingUrl || "",
       dark: props.isDark,
       enhanced: props.isEnhanced,
+      animated: props.isAnimated,
       zoomFactor: props.zoomFactor,
     });
     scheduleLayout();
@@ -187,66 +217,102 @@ export function TabPreview(props: IProps) {
     });
   }
 
+  function setShown(value: boolean) {
+    isShown = value;
+    frame?.classList.toggle("tab-preview_visible", value);
+  }
+
+  /** Fits the snapshot ratio inside the given bounds, including frame chrome. */
+  function fitSize(maxWidth: number, maxHeight: number, unit: number): ISize {
+    const chrome = FRAME_CHROME * unit;
+    let width = maxWidth;
+    let height = (width - chrome) / aspectRatio + chrome;
+    if (height > maxHeight) {
+      height = maxHeight;
+      width = (height - chrome) * aspectRatio + chrome;
+    }
+    return { width, height };
+  }
+
   function positionPreview() {
     if (
       disposed ||
       !frame ||
       !ready ||
       !token ||
-      !hasImage ||
+      previewState === "none" ||
       props.tab?.id === undefined
     )
       return;
     const card = props.element.shadowRoot?.querySelector(".card");
     if (!card) return;
     const rect = card.getBoundingClientRect();
-    const target = card
-      .querySelector(`.tab[data-tab-id="${props.tab.id}"]`)
-      ?.getBoundingClientRect();
     const unit = 1 / props.zoomFactor;
     const margin = 20 * unit;
-    const gap = 16 * unit;
-    const maxWidth = 520 * unit;
+    const gap = 14 * unit;
+    const minWidth = 260 * unit;
+    const preferredWidth = Math.max(
+      300 * unit,
+      Math.min(rect.width * 1.3, 560 * unit)
+    );
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const rightSpace = viewportWidth - margin - rect.right - gap;
     const leftSpace = rect.left - gap - margin;
     const clamp = (value: number, max: number) =>
       Math.max(margin, Math.min(value, max));
-    let width: number;
-    let height: number;
     let left: number;
     let top: number;
-    if (Math.max(rightSpace, leftSpace) >= 260 * unit) {
-      const onRight = rightSpace >= maxWidth || rightSpace >= leftSpace;
-      width = Math.min(maxWidth, onRight ? rightSpace : leftSpace);
-      height = Math.min(width * 0.625 + 64 * unit, viewportHeight - 2 * margin);
-      left = onRight ? rect.right + gap : rect.left - gap - width;
+    let transformOrigin: string;
+    const sideSpace = Math.max(rightSpace, leftSpace);
+    let size = fitSize(
+      Math.min(preferredWidth, sideSpace),
+      viewportHeight - 2 * margin,
+      unit
+    );
+    if (sideSpace >= minWidth && size.width >= minWidth) {
+      const onRight = rightSpace >= size.width || rightSpace >= leftSpace;
+      left = onRight ? rect.right + gap : rect.left - gap - size.width;
+      // Align with the card instead of the selected row so arrow-key
+      // navigation does not make the preview jump around.
       top = clamp(
-        (target ? target.top + target.height / 2 : rect.top + rect.height / 2) -
-          height / 2,
-        viewportHeight - margin - height
+        rect.top + (rect.height - size.height) / 2,
+        viewportHeight - margin - size.height
       );
+      transformOrigin = onRight ? "left center" : "right center";
     } else {
       const below = viewportHeight - margin - rect.bottom - gap;
       const above = rect.top - gap - margin;
       const atBottom = below >= above;
-      width = Math.min(maxWidth, viewportWidth - 2 * margin);
-      height = Math.min(width * 0.625 + 64 * unit, Math.max(below, above));
-      if (width < 260 * unit || height < 140 * unit) {
-        frame.style.visibility = "hidden";
+      size = fitSize(
+        Math.min(preferredWidth, viewportWidth - 2 * margin),
+        Math.max(below, above),
+        unit
+      );
+      if (size.width < minWidth || size.height < 140 * unit) {
+        setShown(false);
         return;
       }
       left = clamp(
-        rect.left + (rect.width - width) / 2,
-        viewportWidth - margin - width
+        rect.left + (rect.width - size.width) / 2,
+        viewportWidth - margin - size.width
       );
-      top = atBottom ? rect.bottom + gap : rect.top - gap - height;
+      top = atBottom ? rect.bottom + gap : rect.top - gap - size.height;
+      transformOrigin = atBottom ? "center top" : "center bottom";
     }
+    if (!isShown) {
+      // Jump to the new geometry before fading in rather than sliding there.
+      frame.style.transition = "none";
+    }
+    frame.style.transformOrigin = transformOrigin;
     frame.style.left = `${left}px`;
     frame.style.top = `${top}px`;
-    frame.style.width = `${width}px`;
-    frame.style.height = `${height}px`;
-    frame.style.visibility = "visible";
+    frame.style.width = `${size.width}px`;
+    frame.style.height = `${size.height}px`;
+    if (!isShown) {
+      void frame.offsetWidth;
+      frame.style.removeProperty("transition");
+    }
+    setShown(true);
   }
 }

@@ -329,6 +329,7 @@ function Popup({ element }: IProps) {
               zoomFactor={store.zoomFactor}
               isDark={isDark()}
               isEnhanced={store.settings.isVisualEffectsEnabled}
+              isAnimated={isMotionEnabled()}
               sessionRevision={previewSessionRevision()}
             />
           </Show>

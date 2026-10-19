@@ -11,23 +11,41 @@ interface IPreviewTarget {
   dark: boolean;
   enhanced: boolean;
   zoomFactor: number;
+  animated: boolean;
 }
 
+/** "none" hides the frame, "empty" shows a placeholder, "image" a snapshot. */
+type IPreviewState = "none" | "empty" | "image";
+
 const CHANNEL = "popup-tab-switcher-preview";
+const FADE_DURATION = 180;
 const style = document.createElement("style");
 style.textContent = styles;
 document.head.appendChild(style);
 
-const title = document.querySelector<HTMLDivElement>(".preview__title")!;
-const url = document.querySelector<HTMLDivElement>(".preview__url")!;
-let image = document.querySelector<HTMLImageElement>(".preview__image")!;
+const stage = document.querySelector<HTMLDivElement>(".preview__stage")!;
+const placeholder = document.querySelector<HTMLDivElement>(
+  ".preview__placeholder"
+)!;
+const placeholderIcon = document.querySelector<HTMLImageElement>(
+  ".preview__placeholderIcon"
+)!;
+const placeholderDomain = document.querySelector<HTMLDivElement>(
+  ".preview__placeholderDomain"
+)!;
+const meta = document.querySelector<HTMLElement>(".preview__meta")!;
+const metaFavicon =
+  document.querySelector<HTMLImageElement>(".preview__favicon")!;
+const metaDomain = document.querySelector<HTMLSpanElement>(".preview__domain")!;
+const metaTime = document.querySelector<HTMLSpanElement>(".preview__time")!;
 let requestRevision = 0;
 let isDisabled = false;
 let isLoading = false;
-let isAvailable = false;
+let state: IPreviewState = "none";
+let aspectRatio: number | undefined;
 let currentTarget: IPreviewTarget | undefined;
 
-function publishAvailability() {
+function publishState() {
   if (!currentTarget) {
     return;
   }
@@ -37,28 +55,111 @@ function publishAvailability() {
       type: "preview-state",
       requestId: currentTarget.requestId,
       tabId: currentTarget.tabId,
-      available: isAvailable,
+      state,
+      aspectRatio,
     },
     "*"
   );
 }
 
-function clearImage() {
+function getImages() {
+  return Array.from(
+    stage.querySelectorAll<HTMLImageElement>(".preview__image")
+  );
+}
+
+function removeImages(images: HTMLImageElement[], animated: boolean) {
+  if (!animated) {
+    images.forEach((image) => image.remove());
+    return;
+  }
+  images.forEach((image) => image.classList.add("preview__image_leaving"));
+  window.setTimeout(
+    () => images.forEach((image) => image.remove()),
+    FADE_DURATION
+  );
+}
+
+function resetContent() {
+  removeImages(getImages(), false);
+  placeholder.hidden = true;
+  meta.hidden = true;
+}
+
+function invalidate() {
   requestRevision += 1;
   isLoading = false;
-  isAvailable = false;
-  image.hidden = true;
-  image.removeAttribute("src");
-  publishAvailability();
 }
 
 function clearPreview() {
-  clearImage();
+  invalidate();
+  resetContent();
+  state = "none";
+  aspectRatio = undefined;
+  publishState();
   currentTarget = undefined;
-  title.textContent = "";
-  title.removeAttribute("title");
-  url.textContent = "";
-  url.removeAttribute("title");
+}
+
+function getDomain(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+function getFaviconUrl(pageUrl: string) {
+  const faviconUrl = new URL(chrome.runtime.getURL("/_favicon/"));
+  faviconUrl.searchParams.set("pageUrl", pageUrl);
+  faviconUrl.searchParams.set("size", "64");
+  return faviconUrl.href;
+}
+
+function formatCapturedAt(capturedAt: number) {
+  const seconds = Math.max(0, (Date.now() - capturedAt) / 1000);
+  if (seconds < 60) return "Just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+function showEmpty(target: IPreviewTarget) {
+  removeImages(getImages(), target.animated);
+  meta.hidden = true;
+  placeholderIcon.src = getFaviconUrl(target.url);
+  placeholderDomain.textContent = getDomain(target.url) || target.title;
+  placeholder.hidden = false;
+  state = "empty";
+  publishState();
+}
+
+function showImage(
+  target: IPreviewTarget,
+  nextImage: HTMLImageElement,
+  capturedAt: number
+) {
+  const previous = getImages();
+  placeholder.hidden = true;
+  metaFavicon.src = getFaviconUrl(target.url);
+  metaDomain.textContent = getDomain(target.url);
+  metaTime.textContent = formatCapturedAt(capturedAt);
+  meta.hidden = false;
+  if (target.animated && previous.length > 0) {
+    // Cross-fade over the previous snapshot instead of flashing an empty frame.
+    nextImage.classList.add("preview__image_entering");
+    stage.appendChild(nextImage);
+    void nextImage.offsetWidth;
+    nextImage.classList.remove("preview__image_entering");
+    removeImages(previous, true);
+  } else {
+    removeImages(previous, false);
+    stage.appendChild(nextImage);
+  }
+  aspectRatio = nextImage.naturalWidth / nextImage.naturalHeight;
+  state = "image";
+  publishState();
 }
 
 function isPreviewTarget(data: unknown): data is IPreviewTarget {
@@ -80,6 +181,7 @@ function isPreviewTarget(data: unknown): data is IPreviewTarget {
     typeof target.url === "string" &&
     typeof target.dark === "boolean" &&
     typeof target.enhanced === "boolean" &&
+    typeof target.animated === "boolean" &&
     typeof target.zoomFactor === "number" &&
     Number.isFinite(target.zoomFactor) &&
     target.zoomFactor > 0
@@ -98,17 +200,12 @@ async function showPreview(target: IPreviewTarget) {
     "--preview-unit",
     `${1 / target.zoomFactor}px`
   );
-  title.textContent = target.title || "Untitled tab";
-  title.title = target.title;
-  url.textContent = target.url;
-  url.title = target.url;
-  if (isSameDocument) {
-    publishAvailability();
-    if (isAvailable || isLoading) {
-      return;
-    }
+  if (isSameDocument && (state !== "none" || isLoading)) {
+    if (!isLoading) publishState();
+    return;
   }
-  clearImage();
+  // Keep the previous content visible until the next one is ready.
+  invalidate();
   const revision = requestRevision;
   isLoading = true;
 
@@ -124,31 +221,27 @@ async function showPreview(target: IPreviewTarget) {
       typeof preview.dataUrl !== "string" ||
       !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(preview.dataUrl)
     ) {
+      showEmpty(target);
       return;
     }
 
     // Decode separately so a previous target cannot deliver a late image event.
     const nextImage = new Image();
     nextImage.className = "preview__image";
-    nextImage.alt = image.alt;
+    nextImage.alt = "Selected tab screenshot";
     nextImage.src = preview.dataUrl;
     await nextImage.decode();
-    if (
-      revision !== requestRevision ||
-      isDisabled ||
-      nextImage.naturalWidth <= 0 ||
-      nextImage.naturalHeight <= 0
-    ) {
+    if (revision !== requestRevision || isDisabled) {
       return;
     }
-
-    image.replaceWith(nextImage);
-    image = nextImage;
-    isAvailable = true;
-    publishAvailability();
+    if (nextImage.naturalWidth <= 0 || nextImage.naturalHeight <= 0) {
+      showEmpty(target);
+      return;
+    }
+    showImage(target, nextImage, preview.capturedAt);
   } catch {
-    if (revision === requestRevision) {
-      clearImage();
+    if (revision === requestRevision && !isDisabled) {
+      showEmpty(target);
     }
   } finally {
     if (revision === requestRevision) {
@@ -209,11 +302,13 @@ function onTabRemoved(tabId: number) {
 
 function onTabUpdated(tabId: number, change: chrome.tabs.TabChangeInfo) {
   if (
-    tabId === currentTarget?.tabId &&
+    currentTarget &&
+    tabId === currentTarget.tabId &&
     (change.status === "loading" || typeof change.url === "string")
   ) {
     // A navigation invalidates the cached document, including same-URL reloads.
-    clearImage();
+    invalidate();
+    showEmpty(currentTarget);
   }
 }
 
@@ -227,6 +322,12 @@ function dispose() {
   chrome.tabs.onUpdated.removeListener(onTabUpdated);
 }
 
+placeholderIcon.addEventListener("error", () => {
+  placeholderIcon.removeAttribute("src");
+});
+metaFavicon.addEventListener("error", () => {
+  metaFavicon.removeAttribute("src");
+});
 window.addEventListener("message", onParentMessage);
 window.addEventListener("pagehide", dispose);
 chrome.storage.onChanged.addListener(onSettingsChanged);

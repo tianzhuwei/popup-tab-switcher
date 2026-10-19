@@ -511,8 +511,9 @@ async function captureCurrentTab(windowId?: number): Promise<void> {
     if (!isCurrentCapture(revision, currentEpoch)) return;
     lastCapture = Date.now();
     const screenshot = await chrome.tabs.captureVisibleTab(window.id, {
+      // Capture near-lossless; the single lossy encode happens after resizing.
       format: "jpeg",
-      quality: 70,
+      quality: 92,
     });
     if (!isCurrentCapture(revision, currentEpoch)) return;
     const preview = await resizeScreenshot(screenshot);
@@ -599,10 +600,12 @@ async function resizeScreenshot(
       "2d"
     ) as OffscreenCanvasRenderingContext2D | null;
     if (!context) throw new Error("Screenshot resizing is unavailable");
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
     context.drawImage(bitmap, 0, 0, width, height);
     const resized = await canvas.convertToBlob({
       type: "image/jpeg",
-      quality: 0.72,
+      quality: 0.8,
     });
     const bytes = new Uint8Array(await resized.arrayBuffer());
     let binary = "";

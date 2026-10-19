@@ -102,20 +102,49 @@
 }
 
 .tab-preview {
+  @include popup-theme-light();
+
   position: absolute;
   display: block;
   width: 0;
   height: 0;
   visibility: hidden;
+  opacity: 0;
+  transform: scale(0.97);
   border: 0;
-  border-radius: calc(var(--popup-unit) * 16);
-  box-shadow: 0 calc(var(--popup-unit) * 16) calc(var(--popup-unit) * 44)
-    rgba(34, 49, 90, 0.16);
+  border-radius: var(--popup-border-radius);
+  background: transparent;
+  color-scheme: normal;
+  box-shadow: var(--card-shadow);
   pointer-events: none;
 
   &_dark {
-    box-shadow: 0 calc(var(--popup-unit) * 16) calc(var(--popup-unit) * 44)
-      rgba(3, 7, 18, 0.32);
+    @include popup-theme-dark();
+  }
+
+  // Blur the host page behind the frame, matching the glass card.
+  &_enhanced {
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    box-shadow: var(--card-shadow), var(--card-glass-highlight);
+  }
+
+  &_visible {
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+  }
+
+  &_animated {
+    transition: opacity 160ms ease,
+      transform 200ms cubic-bezier(0.16, 1, 0.3, 1), visibility 0s linear 160ms,
+      top 180ms ease, left 180ms ease, width 180ms ease, height 180ms ease;
+
+    &.tab-preview_visible {
+      transition: opacity 160ms ease,
+        transform 200ms cubic-bezier(0.16, 1, 0.3, 1), visibility 0s,
+        top 180ms ease, left 180ms ease, width 180ms ease, height 180ms ease;
+    }
   }
 }
 
@@ -315,7 +344,7 @@
   height: calc(var(--popup-unit) * 20);
   margin-left: calc(var(--popup-unit) * 6);
   color: var(--tab-secondary-color);
-  opacity: 0.7;
+  opacity: 0;
 
   &:hover,
   &:focus-visible {
@@ -330,6 +359,10 @@
   .tab__closeButton,
   .tab__pinButton {
     opacity: 1;
+  }
+
+  .tab__previewButton:not(:hover):not(:focus-visible) {
+    opacity: 0.7;
   }
 }
 

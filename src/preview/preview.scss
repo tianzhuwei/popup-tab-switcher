@@ -4,23 +4,29 @@
 
 html {
   --preview-unit: 1px;
-  --preview-surface: rgba(250, 252, 255, 0.97);
+  --preview-surface: rgba(250, 252, 255, 0.94);
   --preview-text: #1d2944;
-  --preview-muted: #768197;
-  --preview-border: rgba(125, 148, 188, 0.2);
-  --preview-canvas: rgba(224, 232, 246, 0.35);
-  --preview-glow: rgba(172, 203, 255, 0.22);
+  --preview-muted: #7382a4;
+  --preview-border: rgba(255, 255, 255, 0.88);
+  --preview-image-border: rgba(80, 102, 148, 0.12);
+  --preview-canvas: rgba(225, 233, 247, 0.6);
+  --preview-glow: rgba(185, 215, 255, 0.14);
+  --preview-glow-secondary: rgba(211, 198, 255, 0.12);
+  --preview-meta-background: rgba(250, 252, 255, 0.82);
   color-scheme: light;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
 
   &.dark {
-    --preview-surface: rgba(53, 65, 87, 0.97);
+    --preview-surface: rgba(53, 65, 87, 0.94);
     --preview-text: #e7ecfa;
-    --preview-muted: #b4bfd3;
-    --preview-border: rgba(199, 216, 248, 0.18);
-    --preview-canvas: rgba(22, 31, 48, 0.24);
-    --preview-glow: rgba(150, 176, 234, 0.12);
+    --preview-muted: #98a6c7;
+    --preview-border: rgba(176, 195, 240, 0.2);
+    --preview-image-border: rgba(201, 215, 255, 0.1);
+    --preview-canvas: rgba(28, 37, 56, 0.55);
+    --preview-glow: rgba(141, 183, 249, 0.1);
+    --preview-glow-secondary: rgba(181, 157, 239, 0.08);
+    --preview-meta-background: rgba(42, 52, 72, 0.82);
     color-scheme: dark;
   }
 }
@@ -38,65 +44,151 @@ body {
   display: none !important;
 }
 
+// Matches the popup card material so both surfaces read as one component.
 .preview {
-  display: flex;
-  flex-direction: column;
+  position: relative;
   width: 100%;
   height: 100%;
+  padding: calc(var(--preview-unit) * 6);
   overflow: hidden;
   color: var(--preview-text);
-  background: var(--preview-surface);
+  background-color: var(--preview-surface);
   border: calc(var(--preview-unit) * 1) solid var(--preview-border);
   border-radius: calc(var(--preview-unit) * 16);
 
   .enhanced & {
     background-image: radial-gradient(
-      ellipse at 15% 0,
-      var(--preview-glow),
-      transparent 70%
-    );
+        ellipse at top left,
+        var(--preview-glow),
+        transparent 62%
+      ),
+      radial-gradient(
+        ellipse at bottom right,
+        var(--preview-glow-secondary),
+        transparent 62%
+      );
   }
 }
 
-.preview__header {
-  flex: none;
-  min-width: 0;
-  padding: calc(var(--preview-unit) * 15) calc(var(--preview-unit) * 18)
-    calc(var(--preview-unit) * 13);
-  border-bottom: calc(var(--preview-unit) * 1) solid var(--preview-border);
+.preview__stage,
+.preview__placeholder {
+  position: absolute;
+  inset: calc(var(--preview-unit) * 6);
+  overflow: hidden;
+  border-radius: calc(var(--preview-unit) * 10);
+  background: var(--preview-canvas);
+  box-shadow: inset 0 0 0 calc(var(--preview-unit) * 1)
+    var(--preview-image-border);
 }
 
-.preview__title,
-.preview__url {
+.preview__image {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  // Frame size follows the snapshot ratio; cover hides sub-pixel rounding gaps.
+  object-fit: cover;
+  object-position: top center;
+  opacity: 1;
+  transition: opacity 180ms ease;
+
+  &_entering,
+  &_leaving {
+    opacity: 0;
+  }
+}
+
+.preview__placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--preview-unit) * 8);
+  padding: calc(var(--preview-unit) * 16);
+  text-align: center;
+}
+
+.preview__placeholderIcon {
+  width: calc(var(--preview-unit) * 40);
+  height: calc(var(--preview-unit) * 40);
+  border-radius: calc(var(--preview-unit) * 10);
+  object-fit: contain;
+
+  &:not([src]) {
+    visibility: hidden;
+  }
+}
+
+.preview__placeholderDomain {
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.preview__title {
-  font-size: calc(var(--preview-unit) * 14);
+  font-size: calc(var(--preview-unit) * 13);
   font-weight: 600;
-  line-height: calc(var(--preview-unit) * 20);
+  line-height: calc(var(--preview-unit) * 18);
 }
 
-.preview__url {
-  margin-top: calc(var(--preview-unit) * 3);
+.preview__placeholderText {
   color: var(--preview-muted);
   font-size: calc(var(--preview-unit) * 11);
   line-height: calc(var(--preview-unit) * 16);
 }
 
-.preview__content {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  background: var(--preview-canvas);
+.preview__meta {
+  position: absolute;
+  left: calc(var(--preview-unit) * 14);
+  bottom: calc(var(--preview-unit) * 14);
+  display: flex;
+  align-items: center;
+  gap: calc(var(--preview-unit) * 6);
+  max-width: calc(100% - var(--preview-unit) * 28);
+  padding: calc(var(--preview-unit) * 4) calc(var(--preview-unit) * 10)
+    calc(var(--preview-unit) * 4) calc(var(--preview-unit) * 6);
+  border-radius: calc(var(--preview-unit) * 999);
+  background: var(--preview-meta-background);
+  box-shadow: 0 calc(var(--preview-unit) * 2) calc(var(--preview-unit) * 8)
+      rgba(20, 30, 60, 0.12),
+    inset 0 0 0 calc(var(--preview-unit) * 1) var(--preview-image-border);
+  color: var(--preview-text);
+  font-size: calc(var(--preview-unit) * 11);
+  line-height: calc(var(--preview-unit) * 16);
+  white-space: nowrap;
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
 }
 
-.preview__image {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+.preview__favicon {
+  flex: none;
+  width: calc(var(--preview-unit) * 14);
+  height: calc(var(--preview-unit) * 14);
+  border-radius: calc(var(--preview-unit) * 3);
+
+  &:not([src]) {
+    display: none;
+  }
+}
+
+.preview__domain {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.preview__time {
+  flex: none;
+  color: var(--preview-muted);
+
+  &::before {
+    content: "·";
+    margin-right: calc(var(--preview-unit) * 6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview__image {
+    transition: none;
+  }
 }
