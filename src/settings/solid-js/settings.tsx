@@ -1,5 +1,5 @@
 import { render } from "solid-js/web";
-import { createEffect } from "solid-js";
+import { createEffect, onCleanup, onMount } from "solid-js";
 import styles from "./settings.module.scss";
 import {
   createSettingsStore,
@@ -23,6 +23,26 @@ function Settings(props: ISettingsProps) {
     restoreDefaultSettings,
   } = props.settingsStore;
   const isDark = createThemeMode(() => store.settings.themeMode);
+  let settingsElement: HTMLDivElement;
+
+  onMount(() => {
+    let previousHeight = 0;
+    const updateHeight = () => {
+      // Measure natural content, not scrollHeight, which can retain the old viewport height.
+      const height = Math.max(
+        25,
+        Math.min(600, Math.ceil(settingsElement.getBoundingClientRect().height))
+      );
+      if (height === previousHeight) return;
+      previousHeight = height;
+      document.documentElement.style.height = `${height}px`;
+      document.body.style.height = `${height}px`;
+    };
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(settingsElement);
+    updateHeight();
+    onCleanup(() => observer.disconnect());
+  });
 
   // Toggle a class on <html> so the body background (and other root-level
   // theme variables) follow the active theme.
@@ -36,6 +56,7 @@ function Settings(props: ISettingsProps) {
 
   return (
     <div
+      ref={settingsElement!}
       class={`${styles.settings} mdc-typography`}
       classList={{ [styles.settings_dark]: isDark() }}
     >
