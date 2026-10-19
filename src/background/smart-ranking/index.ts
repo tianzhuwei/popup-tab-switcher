@@ -167,15 +167,11 @@ function initialize(): Promise<void> {
             value.confidence <= 1 &&
             value.probabilities &&
             typeof value.probabilities === "object" &&
-            Object.keys(value.probabilities).length >= 2 &&
+            Object.keys(value.probabilities).length >= 1 &&
             Object.keys(value.probabilities).length <= 255 &&
-            Object.prototype.hasOwnProperty.call(
-              value.probabilities,
-              "other"
-            ) &&
             Object.entries(value.probabilities).every(
               ([id, probability]) =>
-                /^(?:tab_\d+|other)$/.test(id) &&
+                /^tab_\d+$/.test(id) &&
                 typeof probability === "number" &&
                 Number.isFinite(probability) &&
                 probability >= 0 &&

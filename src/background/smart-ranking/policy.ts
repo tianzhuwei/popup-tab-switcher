@@ -129,11 +129,7 @@ export function applyRanking(
       (left, right) =>
         probabilities[`tab_${right.id}`] - probabilities[`tab_${left.id}`]
     );
-  if (
-    confidence < MIN_CONFIDENCE ||
-    !candidates.length ||
-    probabilities.other >= probabilities[`tab_${candidates[0].id}`]
-  )
+  if (confidence < MIN_CONFIDENCE || !candidates.length)
     return input.visibleTabs;
   const promoted = candidates.slice(0, MAX_PROMOTED_TABS);
   const promotedIds = new Set(promoted.map((tab) => tab.id));

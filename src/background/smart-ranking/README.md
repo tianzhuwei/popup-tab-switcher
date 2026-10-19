@@ -16,10 +16,11 @@ open popup. Without a matching prediction, the original visit order is used.
 
 The initial policy promotes at most three ordinary tabs. Pinned tabs, the current
 tab, and the previously used tab keep their original positions. Low-confidence
-predictions or an `other` result preserve visit order. The displayed percentages
-are raw model probabilities among the supplied candidates, including an unseen
-`other` option; they are not measured prediction accuracy or renormalized over
-the visible rows.
+predictions preserve visit order. Predictions assume the user has opened the tab
+switcher and is ready to select one of the supplied candidate tabs. The displayed
+percentages are raw model probabilities among those candidates; they are not
+measured prediction accuracy or renormalized over the visible rows. Cached
+predictions containing the removed `other` option are discarded on loading.
 
 Only ordinary non-incognito HTTP(S) pages with public-looking DNS hostnames are
 eligible. Local names, IP addresses and common intranet suffixes are excluded;
