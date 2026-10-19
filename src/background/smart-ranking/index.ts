@@ -289,11 +289,7 @@ export async function getSmartRankingSnapshot(input: IRankingInput) {
     scheduleSmartRanking();
     return fallback;
   }
-  const tabs = applyRanking(
-    input,
-    prediction.probabilities,
-    prediction.confidence
-  );
+  const tabs = applyRanking(input, prediction.probabilities);
   const tabProbabilities: Record<string, number> = {};
   for (const tab of tabs) {
     const probability = prediction.probabilities[`tab_${tab.id}`];

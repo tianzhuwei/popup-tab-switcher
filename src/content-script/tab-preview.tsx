@@ -20,9 +20,7 @@ export function TabPreview(props: IProps) {
   let ready = false;
   let hasImage = false;
   let requestId = 0;
-  let settled = false;
   let disposed = false;
-  let selectionTimer: number | undefined;
   let layoutFrame: number | undefined;
   const origin = `chrome-extension://${chrome.runtime.id}`;
   const resizeObserver = new ResizeObserver(scheduleLayout);
@@ -32,13 +30,8 @@ export function TabPreview(props: IProps) {
     on(
       () => [props.tab?.id, props.tab?.url],
       () => {
-        settled = false;
-        clearTimeout(selectionTimer);
         clearPreview();
-        selectionTimer = window.setTimeout(() => {
-          settled = true;
-          publishTarget();
-        }, 200);
+        publishTarget();
       }
     )
   );
@@ -67,7 +60,6 @@ export function TabPreview(props: IProps) {
 
   onCleanup(() => {
     disposed = true;
-    clearTimeout(selectionTimer);
     if (layoutFrame !== undefined) cancelAnimationFrame(layoutFrame);
     window.removeEventListener("message", onFrameMessage);
     window.removeEventListener("resize", scheduleLayout);
@@ -151,8 +143,7 @@ export function TabPreview(props: IProps) {
 
   function publishTarget() {
     const tab = props.tab;
-    if (disposed || !ready || !settled || !token || tab?.id === undefined)
-      return;
+    if (disposed || !ready || !token || tab?.id === undefined) return;
     // Refresh lazily when a long-open popup next requests a target.
     if (Date.now() - sessionOpenedAt >= SESSION_REFRESH_INTERVAL) {
       requestSession();
@@ -180,12 +171,20 @@ export function TabPreview(props: IProps) {
   }
 
   function positionPreview() {
-    if (disposed || !frame || !ready || !settled || !token || !hasImage) return;
+    if (
+      disposed ||
+      !frame ||
+      !ready ||
+      !token ||
+      !hasImage ||
+      props.tab?.id === undefined
+    )
+      return;
     const card = props.element.shadowRoot?.querySelector(".card");
     if (!card) return;
     const rect = card.getBoundingClientRect();
-    const selected = card
-      .querySelector(".tab_selected")
+    const target = card
+      .querySelector(`.tab[data-tab-id="${props.tab.id}"]`)
       ?.getBoundingClientRect();
     const unit = 1 / props.zoomFactor;
     const margin = 20 * unit;
@@ -207,9 +206,7 @@ export function TabPreview(props: IProps) {
       height = Math.min(width * 0.625 + 64 * unit, viewportHeight - 2 * margin);
       left = onRight ? rect.right + gap : rect.left - gap - width;
       top = clamp(
-        (selected
-          ? selected.top + selected.height / 2
-          : rect.top + rect.height / 2) -
+        (target ? target.top + target.height / 2 : rect.top + rect.height / 2) -
           height / 2,
         viewportHeight - margin - height
       );

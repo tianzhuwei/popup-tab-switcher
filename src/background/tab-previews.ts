@@ -264,6 +264,29 @@ export function readTabPreview(
   });
 }
 
+/** Only availability IDs enter the popup model; image data stays in the trusted frame. */
+export function getAvailableTabPreviewIds(
+  tabs: chrome.tabs.Tab[]
+): Promise<number[]> {
+  return serialize(async () => {
+    const currentEpoch = epoch;
+    if (
+      !enabled ||
+      !available ||
+      !(await hasPermission()) ||
+      currentEpoch !== epoch
+    )
+      return [];
+    return tabs
+      .filter((tab) => {
+        if (!isPreviewable(tab)) return false;
+        const preview = previews.get(tab.id!);
+        return preview?.url === tab.url;
+      })
+      .map((tab) => tab.id!);
+  });
+}
+
 function serialize<T>(action: () => Promise<T>): Promise<T> {
   const result = queue.then(action);
   queue = result.catch((error) => {

@@ -42,6 +42,20 @@ function Popup({ element }: IProps) {
   // Resolves the effective theme (auto follows the OS, or a manual choice).
   const isDark = createThemeMode(() => store.settings.themeMode);
   const [isVisible, setIsVisible] = createSignal(false);
+  const [previewHoveredTabId, setPreviewHoveredTabId] = createSignal<number>();
+  const [previewFocusedTabId, setPreviewFocusedTabId] = createSignal<number>();
+  const isManualPreviewEnabled = () =>
+    store.settings.isTabPreviewEnabled &&
+    !store.settings.isTabPreviewAutoEnabled;
+  const previewTab = () => {
+    if (store.settings.isTabPreviewAutoEnabled) {
+      return store.tabs[store.selectedTabIndex];
+    }
+    const tabId = previewHoveredTabId() ?? previewFocusedTabId();
+    return tabId !== undefined && store.tabPreviewIds.includes(tabId)
+      ? store.tabs.find((tab) => tab.id === tabId)
+      : undefined;
+  };
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const [isReducedMotion, setIsReducedMotion] = createSignal(
     reducedMotion.matches
@@ -149,6 +163,17 @@ function Popup({ element }: IProps) {
 
   createEffect(on(() => store.isOpen, updateOverlayVisibility));
 
+  createEffect(
+    on(
+      () => [
+        store.isOpen,
+        store.settings.isTabPreviewEnabled,
+        store.settings.isTabPreviewAutoEnabled,
+      ],
+      resetManualPreview
+    )
+  );
+
   createEffect(() => {
     if (store.isOpen) {
       updateOverlayAppearance();
@@ -195,6 +220,25 @@ function Popup({ element }: IProps) {
                     isReducedMotion={isReducedMotion()}
                     isPinned={isPinned(tab.id!)}
                     probability={store.tabProbabilities[String(tab.id)]}
+                    hasPreview={
+                      isManualPreviewEnabled() &&
+                      tab.id !== undefined &&
+                      store.tabPreviewIds.includes(tab.id)
+                    }
+                    onPreviewHover={(hovered) => {
+                      if (hovered) {
+                        setPreviewHoveredTabId(tab.id);
+                      } else if (previewHoveredTabId() === tab.id) {
+                        setPreviewHoveredTabId(undefined);
+                      }
+                    }}
+                    onPreviewFocus={(focused) => {
+                      if (focused) {
+                        setPreviewFocusedTabId(tab.id);
+                      } else if (previewFocusedTabId() === tab.id) {
+                        setPreviewFocusedTabId(undefined);
+                      }
+                    }}
                     onTogglePin={() => {
                       suppressAutoClose();
                       snapshotTabPositions();
@@ -252,7 +296,7 @@ function Popup({ element }: IProps) {
           <Show when={store.isOpen && store.settings.isTabPreviewEnabled}>
             <TabPreview
               element={element}
-              tab={store.tabs[store.selectedTabIndex]}
+              tab={previewTab()}
               zoomFactor={store.zoomFactor}
               isDark={isDark()}
               isEnhanced={store.settings.isVisualEffectsEnabled}
@@ -544,10 +588,16 @@ function Popup({ element }: IProps) {
     popupRequestGeneration += 1;
     pendingPopupRequests = Promise.resolve();
     isSettingsDemo = false;
+    resetManualPreview();
     if (!isDisposed) {
       closeStorePopup();
       chrome.runtime.sendMessage(closeTabPreview());
     }
+  }
+
+  function resetManualPreview() {
+    setPreviewHoveredTabId(undefined);
+    setPreviewFocusedTabId(undefined);
   }
 
   function requestPopup(increment?: number) {
@@ -715,6 +765,18 @@ function Popup({ element }: IProps) {
       !event.ctrlKey &&
       !event.metaKey &&
       !event.shiftKey;
+    const isPreviewButton = event
+      .composedPath()
+      .some(
+        (target) =>
+          target instanceof HTMLElement &&
+          target.classList.contains("tab__previewButton")
+      );
+    if (isPreviewButton && (event.key === "Enter" || isPlainSpace)) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     const handler = handlers[isPlainSpace ? "Enter" : event.key];
     if (handler) {
       handler();

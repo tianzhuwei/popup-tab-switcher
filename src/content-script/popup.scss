@@ -263,12 +263,14 @@
   }
 
   .tab__closeButton,
+  .tab__previewButton,
   .tab__pinButton {
     color: var(--tab_selected-color);
   }
 }
 
 .tab__closeButton,
+.tab__previewButton,
 .tab__pinButton {
   all: unset;
   display: flex;
@@ -308,6 +310,21 @@
   }
 }
 
+.tab__previewButton {
+  width: calc(var(--popup-unit) * 20);
+  height: calc(var(--popup-unit) * 20);
+  margin-left: calc(var(--popup-unit) * 6);
+  color: var(--tab-secondary-color);
+  opacity: 0.7;
+
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+    color: var(--tab_accent-color);
+    background-color: var(--tab-button-hover-background);
+  }
+}
+
 .tab:hover,
 .tab_selected {
   .tab__closeButton,
@@ -318,6 +335,7 @@
 
 .tab_selected {
   .tab__closeButton:hover,
+  .tab__previewButton:hover,
   .tab__pinButton:hover {
     color: var(--tab_selected-color);
     background-color: rgba(49, 75, 125, 0.1);
@@ -329,13 +347,15 @@
   height: calc(var(--popup-unit) * 12);
 }
 
-.tab__pinIcon {
+.tab__pinIcon,
+.tab__previewIcon {
   width: calc(var(--popup-unit) * 14);
   height: calc(var(--popup-unit) * 14);
 }
 
 .card__newTabButton,
 .tab__closeButton,
+.tab__previewButton,
 .tab__pinButton {
   &:focus-visible {
     opacity: 1;
@@ -346,6 +366,7 @@
 
 .tab_selected {
   .tab__closeButton:focus-visible,
+  .tab__previewButton:focus-visible,
   .tab__pinButton:focus-visible {
     outline-color: var(--tab_selected-color);
   }
@@ -358,6 +379,7 @@
 
   .card__newTabButton,
   .tab__closeButton,
+  .tab__previewButton,
   .tab__pinButton {
     transition: opacity 90ms ease, transform 90ms ease,
       background-color 90ms ease;
@@ -372,6 +394,7 @@
   .card_enhanced {
     .card__newTabButton,
     .tab__closeButton,
+    .tab__previewButton,
     .tab__pinButton {
       transition: none;
 

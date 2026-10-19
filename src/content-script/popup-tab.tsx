@@ -1,6 +1,6 @@
 import { createEffect, createMemo, onCleanup } from "solid-js";
 import { Show } from "solid-js/web";
-import { TabIcon, PinIcon, CloseIcon } from "./icons";
+import { TabIcon, PinIcon, CloseIcon, PreviewIcon } from "./icons";
 
 interface IProps {
   isSelected: boolean;
@@ -8,11 +8,14 @@ interface IProps {
   isReducedMotion: boolean;
   isPinned: boolean;
   probability?: number;
+  hasPreview: boolean;
   tab: chrome.tabs.Tab;
   onClick: () => void;
   onHover: () => void;
   onTogglePin: () => void;
   onClose: () => void;
+  onPreviewHover: (isHovered: boolean) => void;
+  onPreviewFocus: (isFocused: boolean) => void;
   textScrollSpeed: number;
   textScrollDelay: number;
 }
@@ -53,7 +56,18 @@ export function PopupTab(props: IProps) {
     }
   });
 
-  onCleanup(cancelTextAnimation);
+  onCleanup(() => {
+    cancelTextAnimation();
+    props.onPreviewHover(false);
+    props.onPreviewFocus(false);
+  });
+
+  createEffect(() => {
+    if (!props.hasPreview) {
+      props.onPreviewHover(false);
+      props.onPreviewFocus(false);
+    }
+  });
 
   function handlePinClick(e: MouseEvent) {
     e.stopPropagation();
@@ -64,6 +78,11 @@ export function PopupTab(props: IProps) {
     e.stopPropagation();
     e.preventDefault();
     props.onClose();
+  }
+
+  function handlePreviewClick(e: MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
   }
 
   return (
@@ -106,6 +125,22 @@ export function PopupTab(props: IProps) {
           </Show>
         </div>
       </div>
+      <Show when={props.hasPreview}>
+        <button
+          type="button"
+          class="tab__previewButton"
+          onClick={handlePreviewClick}
+          onMouseDown={(event) => event.preventDefault()}
+          onMouseEnter={() => props.onPreviewHover(true)}
+          onMouseLeave={() => props.onPreviewHover(false)}
+          onFocus={() => props.onPreviewFocus(true)}
+          onBlur={() => props.onPreviewFocus(false)}
+          title="Preview tab screenshot"
+          aria-label="Preview tab screenshot"
+        >
+          <PreviewIcon />
+        </button>
+      </Show>
       <button
         type="button"
         class="tab__pinButton"

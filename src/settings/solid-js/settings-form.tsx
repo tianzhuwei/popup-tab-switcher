@@ -250,7 +250,7 @@ export function SettingsForm(props: IProps) {
           <label
             for="isTabPreviewEnabled"
             class={styles.settings__label}
-            title="Show a cached screenshot of the selected tab. Requires website access."
+            title="Cache tab screenshots for automatic or hover previews. Requires website access."
           >
             <i class={styles.iconInLabel}>image</i>
             Tab previews
@@ -271,6 +271,29 @@ export function SettingsForm(props: IProps) {
               {previewPermissionError()}
             </span>
           </div>
+        </Show>
+        <Show when={props.store.settings.isTabPreviewEnabled}>
+          <Row>
+            <label
+              for="isTabPreviewAutoEnabled"
+              class={styles.settings__label}
+              title="Automatically preview the selected tab. Turn off to preview only when hovering the small image icon; screenshots remain cached."
+            >
+              <i class={styles.iconInLabel}>image</i>
+              Auto previews
+            </label>
+            <MSwitch
+              id="isTabPreviewAutoEnabled"
+              isOn={props.store.settings.isTabPreviewAutoEnabled}
+              disabled={previewPendingValue() !== undefined}
+              onToggle={() => {
+                props.setSettingsOptions({
+                  isTabPreviewAutoEnabled:
+                    !props.store.settings.isTabPreviewAutoEnabled,
+                });
+              }}
+            />
+          </Row>
         </Show>
         <Row>
           <label

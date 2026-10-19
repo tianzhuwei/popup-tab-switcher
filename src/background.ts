@@ -14,6 +14,7 @@ import { log } from "./utils/logger";
 import { ServiceFactory } from "./service-factory";
 import { getActiveTab } from "./background/get-active-tab";
 import {
+  getAvailableTabPreviewIds,
   initTabPreviews,
   notifyPreviewPopupHidden,
   notifyPreviewPopupShown,
@@ -376,6 +377,10 @@ function messageHandlers(): Partial<IHandlers> {
       return {
         tabs: ranked.tabs as chrome.tabs.Tab[],
         tabProbabilities: ranked.tabProbabilities,
+        tabPreviewIds:
+          settings.isTabPreviewEnabled && !settings.isTabPreviewAutoEnabled
+            ? await getAvailableTabPreviewIds(ranked.tabs)
+            : [],
         settings,
         zoomFactor:
           sender.tab?.id !== undefined

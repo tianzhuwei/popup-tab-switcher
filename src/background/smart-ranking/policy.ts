@@ -2,8 +2,6 @@ import { ITab } from "../../utils/check-tab";
 
 // Keep candidate selection, model context and promotion rules in this module.
 const MAX_CANDIDATES = 20;
-const MAX_PROMOTED_TABS = 3;
-const MIN_CONFIDENCE = 0.15;
 
 export interface IDomainUsage {
   visits: number;
@@ -111,8 +109,7 @@ export function createRankingPlan(
 
 export function applyRanking(
   input: IRankingInput,
-  probabilities: Record<string, number>,
-  confidence: number
+  probabilities: Record<string, number>
 ): ITab[] {
   const protectedIds = new Set([
     ...input.pinnedTabIds,
@@ -125,18 +122,17 @@ export function applyRanking(
         !protectedIds.has(tab.id) &&
         typeof probabilities[`tab_${tab.id}`] === "number"
     )
+    // Stable sorting preserves visit order when probabilities are equal, including zero.
     .sort(
       (left, right) =>
         probabilities[`tab_${right.id}`] - probabilities[`tab_${left.id}`]
     );
-  if (confidence < MIN_CONFIDENCE || !candidates.length)
-    return input.visibleTabs;
-  const promoted = candidates.slice(0, MAX_PROMOTED_TABS);
-  const promotedIds = new Set(promoted.map((tab) => tab.id));
+  if (!candidates.length) return input.visibleTabs;
+  const candidateIds = new Set(candidates.map((tab) => tab.id));
   const ordinaryTabs = [
-    ...promoted,
+    ...candidates,
     ...input.visibleTabs.filter(
-      (tab) => !protectedIds.has(tab.id) && !promotedIds.has(tab.id)
+      (tab) => !protectedIds.has(tab.id) && !candidateIds.has(tab.id)
     ),
   ];
   // Leave pins and both navigation anchors in their original positions.

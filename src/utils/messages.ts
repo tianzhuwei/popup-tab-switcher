@@ -140,6 +140,7 @@ interface IGetModelResponse {
   activeTabId: number | undefined;
   previousTabId: number | undefined;
   tabProbabilities: Record<string, number>;
+  tabPreviewIds: number[];
 }
 
 type IMessageResponse<Message extends IMessage> = Message extends ReturnType<

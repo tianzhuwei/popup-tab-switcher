@@ -14,10 +14,12 @@ open popup. Without a matching prediction, the original visit order is used.
 - `../../utils/smart-ranking.ts`: configuration types and official endpoint
   validation shared with the settings page.
 
-The initial policy promotes at most three ordinary tabs. Pinned tabs, the current
-tab, and the previously used tab keep their original positions. Low-confidence
-predictions preserve visit order. Predictions assume the user has opened the tab
-switcher and is ready to select one of the supplied candidate tabs. The displayed
+Ordinary candidates with valid predictions are sorted by descending probability,
+regardless of confidence. Equal probabilities, including zeros, retain their
+most-recently-used order. Pinned tabs, the current tab, and the previously used tab
+keep their original positions. Visible tabs without predictions follow the ranked
+candidates in visit order. Predictions assume the user has opened the tab switcher
+and is ready to select one of the supplied candidate tabs. The displayed
 percentages are raw model probabilities among those candidates; they are not
 measured prediction accuracy or renormalized over the visible rows. Cached
 predictions containing the removed `other` option are discarded on loading.
