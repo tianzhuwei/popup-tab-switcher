@@ -89,6 +89,28 @@ function initialize(): Promise<void> {
         PROVIDERS_KEY,
         HISTORY_KEY,
       ]);
+      // Replace only the former default, preserving credentials and custom endpoints.
+      const legacyEndpoint =
+        "https://dashscope.aliyuncs.com/compatible-mode/v1/systemone";
+      const endpoint = defaultSmartRankingProviders.bailian.endpoint;
+      const migrated: Record<string, unknown> = {};
+      if (
+        saved[CONFIG_KEY]?.provider === "bailian" &&
+        saved[CONFIG_KEY]?.endpoint === legacyEndpoint
+      ) {
+        saved[CONFIG_KEY] = { ...saved[CONFIG_KEY], endpoint };
+        migrated[CONFIG_KEY] = saved[CONFIG_KEY];
+      }
+      if (saved[PROVIDERS_KEY]?.bailian?.endpoint === legacyEndpoint) {
+        saved[PROVIDERS_KEY] = {
+          ...saved[PROVIDERS_KEY],
+          bailian: { ...saved[PROVIDERS_KEY].bailian, endpoint },
+        };
+        migrated[PROVIDERS_KEY] = saved[PROVIDERS_KEY];
+      }
+      if (Object.keys(migrated).length) {
+        await chrome.storage.local.set(migrated);
+      }
       config = normalizeSmartRankingConfig(saved[CONFIG_KEY]);
       providers = normalizeSmartRankingProviders(saved[PROVIDERS_KEY], config);
       if (Array.isArray(saved[HISTORY_KEY])) {

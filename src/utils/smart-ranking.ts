@@ -37,7 +37,8 @@ export interface ISmartRankingTestResult {
 
 export const defaultSmartRankingProviders: ISmartRankingProviders = {
   bailian: {
-    endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1/systemone",
+    endpoint:
+      "https://llm-7qn2t0pgxfebbeb9.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/systemone",
     apiKey: "",
   },
   jev: {
