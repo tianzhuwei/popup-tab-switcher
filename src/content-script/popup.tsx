@@ -4,6 +4,7 @@ import styles from "./popup.scss";
 import {
   contentScriptStarted,
   contentScriptStopped,
+  closeTabPreview,
   createTab,
   handleMessage,
   Message,
@@ -12,6 +13,7 @@ import {
 import { log } from "../utils/logger";
 import { createPopupStore } from "./popup-store";
 import { PopupTab } from "./popup-tab";
+import { TabPreview } from "./tab-preview";
 import uuid from "../utils/uuid";
 import { SelectionAndFocus } from "./selection-and-focus";
 import { createThemeMode } from "../utils/use-theme-mode";
@@ -246,6 +248,15 @@ function Popup({ element }: IProps) {
               </button>
             </div>
           </div>
+          <Show when={store.isOpen && store.settings.isTabPreviewEnabled}>
+            <TabPreview
+              element={element}
+              tab={store.tabs[store.selectedTabIndex]}
+              zoomFactor={store.zoomFactor}
+              isDark={isDark()}
+              isEnhanced={store.settings.isVisualEffectsEnabled}
+            />
+          </Show>
         </div>
       </Show>
     </>
@@ -534,6 +545,7 @@ function Popup({ element }: IProps) {
     isSettingsDemo = false;
     if (!isDisposed) {
       closeStorePopup();
+      chrome.runtime.sendMessage(closeTabPreview());
     }
   }
 

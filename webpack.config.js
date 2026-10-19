@@ -23,6 +23,10 @@ const conf = {
       import: "./src/settings/index.ts",
       filename: "settings/index.js",
     },
+    preview: {
+      import: "./src/preview/index.ts",
+      filename: "preview/index.js",
+    },
   },
 
   output: {
@@ -131,6 +135,10 @@ module.exports = (env) => {
       {
         from: "src/settings/index.html",
         to: "settings",
+      },
+      {
+        from: "src/preview/index.html",
+        to: "preview",
       },
       {
         from: "src/settings/global-styles/",

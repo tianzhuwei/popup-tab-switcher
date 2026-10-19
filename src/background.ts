@@ -13,6 +13,14 @@ import { checkTab, ITab } from "./utils/check-tab";
 import { log } from "./utils/logger";
 import { ServiceFactory } from "./service-factory";
 import { getActiveTab } from "./background/get-active-tab";
+import {
+  initTabPreviews,
+  notifyPreviewPopupHidden,
+  notifyPreviewPopupShown,
+  openTabPreviewSession,
+  readTabPreview,
+  setTabPreviewsEnabled,
+} from "./background/tab-previews";
 
 type ChromeTab = chrome.tabs.Tab;
 type IPort = chrome.runtime.Port;
@@ -34,6 +42,7 @@ if (DEVELOPMENT) {
   });
 }
 
+initTabPreviews();
 initListeners();
 
 function initListeners() {
@@ -65,6 +74,20 @@ function initListeners() {
   chrome.runtime.onConnect.addListener(handleConnection);
   chrome.commands.onCommand.addListener(handleCommand);
   chrome.runtime.onMessage.addListener(handleMessage(messageHandlers()));
+  chrome.permissions.onRemoved.addListener(() => {
+    void chrome.permissions
+      .contains({ origins: ["<all_urls>"] })
+      .then(async (granted) => {
+        if (!granted) {
+          const settings = await ServiceFactory.getSettings();
+          if (settings.isTabPreviewEnabled) {
+            await settings.update({ isTabPreviewEnabled: false });
+          }
+          await setTabPreviewsEnabled(false);
+        }
+      })
+      .catch((error) => log("[Tab preview permission update failed]", error));
+  });
   chrome.runtime.onInstalled.addListener(() => {
     installCloseTabMenu();
     removeLegacyBlankCloseGesture().catch((error) =>
@@ -142,6 +165,7 @@ async function handleCommand(command: string) {
     await switchToPreviousTab();
     return;
   }
+  notifyPreviewPopupShown(active.id);
   if (await initializeContentScript(active)) {
     // This forced activation solves the problem with document.contentType === 'application/pdf'
     // when the document.hasFocus() returns false.
@@ -152,6 +176,7 @@ async function handleCommand(command: string) {
       selectTab(command === Command.NEXT ? 1 : -1)
     );
   } else {
+    notifyPreviewPopupHidden(active.id);
     // Tab initialization may fail due to different reasons:
     // - the page is not loaded,
     // - the initialization timeout passed.
@@ -267,6 +292,7 @@ function messageHandlers(): Partial<IHandlers> {
     },
     [Message.ContentScriptStopped]: async (_m, sender) => {
       log(`[ContentScriptStopped]`, sender.tab);
+      if (sender.tab?.id !== undefined) notifyPreviewPopupHidden(sender.tab.id);
       const registry = await ServiceFactory.getTabRegistry();
       registry.removeFromInitialized(sender.tab!.id!);
     },
@@ -291,8 +317,11 @@ function messageHandlers(): Partial<IHandlers> {
         }
         return;
       }
+      notifyPreviewPopupShown(active.id);
       if (await initializeContentScript(active)) {
         await chrome.tabs.sendMessage(active.id, demoSettings());
+      } else {
+        notifyPreviewPopupHidden(active.id);
       }
     },
     [Message.GET_MODEL]: async (_m, sender) => {
@@ -328,6 +357,39 @@ function messageHandlers(): Partial<IHandlers> {
     [Message.CreateTab]: async (_m, sender) => {
       await chrome.tabs.create({ windowId: sender.tab?.windowId });
     },
+    [Message.OpenTabPreview]: async (_m, sender) => {
+      const owner = sender.tab;
+      if (owner?.id === undefined || sender.frameId !== 0) return;
+      notifyPreviewPopupShown(owner.id);
+      const settings = await ServiceFactory.getSettings();
+      if (!settings.isTabPreviewEnabled) return;
+      const registry = await ServiceFactory.getTabRegistry();
+      const tabs = registry.getTabsToShow(
+        (tab) =>
+          settings.isShowingTabsFromAllWindows ||
+          tab.windowId === owner.windowId
+      );
+      return openTabPreviewSession(
+        owner.id,
+        tabs.map((tab) => tab.id)
+      );
+    },
+    [Message.GetTabPreview]: async ({ token, tabId }, sender) => {
+      if (
+        sender.url !== chrome.runtime.getURL("preview/index.html") ||
+        sender.frameId === 0 ||
+        sender.tab?.id === undefined ||
+        typeof token !== "string" ||
+        !Number.isInteger(tabId)
+      )
+        return;
+      return readTabPreview(token, tabId, sender.tab.id);
+    },
+    [Message.CloseTabPreview]: (_m, sender) => {
+      if (sender.frameId === 0 && sender.tab?.id !== undefined) {
+        notifyPreviewPopupHidden(sender.tab.id);
+      }
+    },
     [Message.SetSettings]: async ({ settings }) => {
       log(`[Settings received]`, settings);
       const currentSettings = await ServiceFactory.getSettings();
@@ -336,6 +398,13 @@ function messageHandlers(): Partial<IHandlers> {
       } else {
         await currentSettings.reset();
       }
+      if (
+        currentSettings.isTabPreviewEnabled &&
+        !(await chrome.permissions.contains({ origins: ["<all_urls>"] }))
+      ) {
+        await currentSettings.update({ isTabPreviewEnabled: false });
+      }
+      await setTabPreviewsEnabled(currentSettings.isTabPreviewEnabled);
     },
     [Message.GetSettings]: async () => {
       log(`[Settings requested]`);

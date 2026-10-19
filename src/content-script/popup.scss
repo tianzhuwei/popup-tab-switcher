@@ -101,6 +101,24 @@
   }
 }
 
+.tab-preview {
+  position: absolute;
+  display: block;
+  width: 0;
+  height: 0;
+  visibility: hidden;
+  border: 0;
+  border-radius: calc(var(--popup-unit) * 16);
+  box-shadow: 0 calc(var(--popup-unit) * 16) calc(var(--popup-unit) * 44)
+    rgba(34, 49, 90, 0.16);
+  pointer-events: none;
+
+  &_dark {
+    box-shadow: 0 calc(var(--popup-unit) * 16) calc(var(--popup-unit) * 44)
+      rgba(3, 7, 18, 0.32);
+  }
+}
+
 .card__footer {
   display: flex;
   flex: 0 0 var(--popup-footer-height);

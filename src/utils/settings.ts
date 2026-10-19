@@ -9,6 +9,7 @@ export interface ISettings {
   numberOfTabsToShow: number;
   themeMode: ThemeMode;
   isVisualEffectsEnabled: boolean;
+  isTabPreviewEnabled: boolean;
   popupWidth: number;
   popupPosition: PopupPosition;
   tabHeight: number;
@@ -27,6 +28,7 @@ export const defaultSettings: ISettings = {
   numberOfTabsToShow: 7,
   themeMode: "auto",
   isVisualEffectsEnabled: false,
+  isTabPreviewEnabled: false,
   popupWidth: 420,
   popupPosition: "center",
   tabHeight: 46,
@@ -87,6 +89,7 @@ function normalizeSettings(settings: ISettings): void {
   if (settings.popupPosition !== "mouse") {
     settings.popupPosition = "center";
   }
+  settings.isTabPreviewEnabled = settings.isTabPreviewEnabled === true;
 }
 
 /**
@@ -145,6 +148,7 @@ export async function getSettings(
         numberOfTabsToShow: this.numberOfTabsToShow,
         themeMode: this.themeMode,
         isVisualEffectsEnabled: this.isVisualEffectsEnabled,
+        isTabPreviewEnabled: this.isTabPreviewEnabled,
         popupWidth: this.popupWidth,
         popupPosition: this.popupPosition,
         tabHeight: this.tabHeight,

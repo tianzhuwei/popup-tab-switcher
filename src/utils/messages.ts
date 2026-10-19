@@ -17,6 +17,9 @@ export enum Message {
   TogglePinTab = "TogglePinTab",
   CloseTab = "CloseTab",
   CreateTab = "CreateTab",
+  OpenTabPreview = "OpenTabPreview",
+  GetTabPreview = "GetTabPreview",
+  CloseTabPreview = "CloseTabPreview",
 }
 
 export function demoSettings() {
@@ -70,6 +73,18 @@ export function createTab() {
   return { type: Message.CreateTab } as const;
 }
 
+export function openTabPreview() {
+  return { type: Message.OpenTabPreview } as const;
+}
+
+export function getTabPreview(token: string, tabId: number) {
+  return { type: Message.GetTabPreview, token, tabId } as const;
+}
+
+export function closeTabPreview() {
+  return { type: Message.CloseTabPreview } as const;
+}
+
 interface IMessageTypeToObjectMap {
   [Message.CLOSE_POPUP]: ReturnType<typeof closePopup>;
   [Message.ContentScriptStarted]: ReturnType<typeof contentScriptStarted>;
@@ -83,6 +98,9 @@ interface IMessageTypeToObjectMap {
   [Message.TogglePinTab]: ReturnType<typeof togglePinTab>;
   [Message.CloseTab]: ReturnType<typeof closeTab>;
   [Message.CreateTab]: ReturnType<typeof createTab>;
+  [Message.OpenTabPreview]: ReturnType<typeof openTabPreview>;
+  [Message.GetTabPreview]: ReturnType<typeof getTabPreview>;
+  [Message.CloseTabPreview]: ReturnType<typeof closeTabPreview>;
 }
 
 type IMessage = IMessageTypeToObjectMap[keyof IMessageTypeToObjectMap];
@@ -102,6 +120,12 @@ type IMessageResponse<Message extends IMessage> = Message extends ReturnType<
   ? IGetModelResponse
   : Message extends ReturnType<typeof getSettings>
   ? ISettings
+  : Message extends ReturnType<typeof openTabPreview>
+  ? string | undefined
+  : Message extends ReturnType<typeof getTabPreview>
+  ?
+      | { dataUrl: string; width: number; height: number; capturedAt: number }
+      | undefined
   : void;
 
 export type IHandlers = {
@@ -158,7 +182,9 @@ export function handleMessage(handlers: Partial<IHandlers>) {
       );
       return;
     }
-    log(`[Message received]`, message);
+    if (message.type !== Message.GetTabPreview) {
+      log(`[Message received]`, message);
+    }
     // @ts-expect-error
     // TODO: How to guarantee correspondence of a message and handler types?
     const response = handler(message, sender);

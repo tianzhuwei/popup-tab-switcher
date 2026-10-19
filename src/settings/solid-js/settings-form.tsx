@@ -73,6 +73,8 @@ function Row(props: { children: any }) {
 }
 
 export function SettingsForm(props: IProps) {
+  let isPreviewPermissionPending = false;
+
   return (
     <form>
       <Show
@@ -207,6 +209,21 @@ export function SettingsForm(props: IProps) {
 
       {/* Appearance (layout in px) */}
       <Section icon="straighten" title="Appearance">
+        <Row>
+          <label
+            for="isTabPreviewEnabled"
+            class={styles.settings__label}
+            title="Show a cached screenshot of the selected tab. Requires website access."
+          >
+            <i class={styles.iconInLabel}>image</i>
+            Tab previews
+          </label>
+          <MSwitch
+            id="isTabPreviewEnabled"
+            isOn={props.store.settings.isTabPreviewEnabled}
+            onToggle={toggleTabPreviews}
+          />
+        </Row>
         <Row>
           <label
             for="isVisualEffectsEnabled"
@@ -393,4 +410,35 @@ export function SettingsForm(props: IProps) {
       </Section>
     </form>
   );
+
+  async function toggleTabPreviews() {
+    if (isPreviewPermissionPending) {
+      restorePreviewSwitch();
+      return;
+    }
+    if (props.store.settings.isTabPreviewEnabled) {
+      props.setSettingsOptions({ isTabPreviewEnabled: false });
+      return;
+    }
+
+    isPreviewPermissionPending = true;
+    try {
+      const granted = await chrome.permissions.request({
+        origins: ["<all_urls>"],
+      });
+      props.setSettingsOptions({ isTabPreviewEnabled: granted });
+    } catch (error) {
+      console.warn("Could not request tab preview access", error);
+    } finally {
+      isPreviewPermissionPending = false;
+      restorePreviewSwitch();
+    }
+  }
+
+  function restorePreviewSwitch() {
+    const control = document.getElementById("isTabPreviewEnabled");
+    if (control instanceof HTMLInputElement) {
+      control.checked = props.store.settings.isTabPreviewEnabled;
+    }
+  }
 }
