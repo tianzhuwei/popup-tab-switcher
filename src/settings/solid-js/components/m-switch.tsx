@@ -2,6 +2,8 @@ interface IProps {
   id: string
   isOn: boolean
   onToggle: () => void
+  toggleOnClick?: boolean
+  disabled?: boolean
 }
 
 export function MSwitch(props: IProps) {
@@ -16,8 +18,14 @@ export function MSwitch(props: IProps) {
             name={props.id}
             class="mdc-switch__native-control"
             role="switch"
-            onChange={() => props.onToggle()}
+            onChange={() => {
+              if (!props.toggleOnClick) props.onToggle()
+            }}
+            on:click={() => {
+              if (props.toggleOnClick) props.onToggle()
+            }}
             checked={props.isOn}
+            disabled={props.disabled}
           />
         </div>
       </div>

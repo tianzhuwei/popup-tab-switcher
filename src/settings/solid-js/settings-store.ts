@@ -5,6 +5,7 @@ export interface IStoreSettingsService {
   update(settings: Partial<ISettings>): Promise<void>
   reset(): Promise<void>
   getSettingsObject(): Promise<ISettings>
+  preview?: () => void
 }
 
 interface ISettingsStoreProps {
@@ -18,7 +19,7 @@ export interface ISettingsStore {
   restoreDefaultSettings: () => Promise<void>
   setKeyboardShortcutsEnabled: (enabled: boolean) => void
   setShortcutsBannerVisible: (visible: boolean) => void
-  setSettingsOptions: (options: Partial<ISettings>) => void
+  setSettingsOptions: (options: Partial<ISettings>) => Promise<void>
   store: ISettingsStoreObject
 }
 
@@ -59,7 +60,7 @@ export function createSettingsStore({
   }
 
   function setSettingsOptions(options: Partial<ISettings>) {
-    enqueueSettingsChange(() => settingsService.update(options))
+    return enqueueSettingsChange(() => settingsService.update(options))
   }
 
   function restoreDefaultSettings() {
@@ -72,9 +73,21 @@ export function createSettingsStore({
       await change()
       if (revision !== settingsRevision) return
       const settings = await settingsService.getSettingsObject()
-      if (revision === settingsRevision) setStore('settings', settings)
+      if (revision === settingsRevision) {
+        setStore('settings', settings)
+        settingsService.preview?.()
+      }
     })
     settingsQueue = next.catch(() => {})
-    return next
+    const settled = next.then(async () => {
+      // A newer change may own the readback that updates the visible settings.
+      let pending: Promise<void>
+      do {
+        pending = settingsQueue
+        await pending
+      } while (pending !== settingsQueue)
+    })
+    void settled.catch(() => {})
+    return settled
   }
 }

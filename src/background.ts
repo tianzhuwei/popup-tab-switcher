@@ -300,7 +300,7 @@ function messageHandlers(): Partial<IHandlers> {
       await activateTab(selectedTab);
     },
     [Message.DEMO_SETTINGS]: async () => {
-      const settings = await ServiceFactory.getSettings(true);
+      const settings = await ServiceFactory.getSettings();
       const registry = await ServiceFactory.getTabRegistry();
       registry.setNumberOfTabsToShow(settings.numberOfTabsToShow);
       const activeTab = await getActiveTab();

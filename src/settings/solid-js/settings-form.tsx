@@ -16,7 +16,7 @@ interface IProps {
   store: ISettingsStoreObject;
   setKeyboardShortcutsEnabled: (enabled: boolean) => void;
   setShortcutsBannerVisible: (visible: boolean) => void;
-  setSettingsOptions: (options: Partial<ISettings>) => void;
+  setSettingsOptions: (options: Partial<ISettings>) => Promise<void>;
   restoreDefaultSettings: () => void;
 }
 
@@ -73,7 +73,8 @@ function Row(props: { children: any }) {
 }
 
 export function SettingsForm(props: IProps) {
-  let isPreviewPermissionPending = false;
+  const [previewPendingValue, setPreviewPendingValue] = createSignal<boolean>();
+  const [previewPermissionError, setPreviewPermissionError] = createSignal("");
 
   return (
     <form>
@@ -220,10 +221,21 @@ export function SettingsForm(props: IProps) {
           </label>
           <MSwitch
             id="isTabPreviewEnabled"
-            isOn={props.store.settings.isTabPreviewEnabled}
+            isOn={
+              previewPendingValue() ?? props.store.settings.isTabPreviewEnabled
+            }
             onToggle={toggleTabPreviews}
+            toggleOnClick={true}
+            disabled={previewPendingValue() !== undefined}
           />
         </Row>
+        <Show when={previewPermissionError()}>
+          <div class={styles.settings__row} role="alert">
+            <span class={styles.settings__label}>
+              {previewPermissionError()}
+            </span>
+          </div>
+        </Show>
         <Row>
           <label
             for="isVisualEffectsEnabled"
@@ -411,26 +423,51 @@ export function SettingsForm(props: IProps) {
     </form>
   );
 
-  async function toggleTabPreviews() {
-    if (isPreviewPermissionPending) {
-      restorePreviewSwitch();
+  function toggleTabPreviews() {
+    if (previewPendingValue() !== undefined) return;
+    const enabled = !props.store.settings.isTabPreviewEnabled;
+    setPreviewPermissionError("");
+    setPreviewPendingValue(enabled);
+    if (!enabled) {
+      void saveTabPreviews(false);
       return;
     }
-    if (props.store.settings.isTabPreviewEnabled) {
-      props.setSettingsOptions({ isTabPreviewEnabled: false });
-      return;
-    }
-
-    isPreviewPermissionPending = true;
     try {
-      const granted = await chrome.permissions.request({
-        origins: ["<all_urls>"],
+      // Keep the permission request inside the native click event.
+      chrome.permissions.request({ origins: ["<all_urls>"] }, (granted) => {
+        const error = chrome.runtime.lastError;
+        if (error || !granted) {
+          setPreviewPermissionError(
+            error?.message ||
+              "Website access was not granted. Tab previews remain off."
+          );
+          setPreviewPendingValue(undefined);
+          restorePreviewSwitch();
+          return;
+        }
+        void saveTabPreviews(true);
       });
-      props.setSettingsOptions({ isTabPreviewEnabled: granted });
     } catch (error) {
-      console.warn("Could not request tab preview access", error);
+      setPreviewPermissionError(String(error));
+      setPreviewPendingValue(undefined);
+      restorePreviewSwitch();
+    }
+  }
+
+  async function saveTabPreviews(enabled: boolean) {
+    try {
+      await props.setSettingsOptions({ isTabPreviewEnabled: enabled });
+      if (props.store.settings.isTabPreviewEnabled !== enabled) {
+        setPreviewPermissionError(
+          "The tab preview setting was not saved. Please try again."
+        );
+      }
+    } catch (error) {
+      setPreviewPermissionError(
+        `Could not save tab previews: ${String(error)}`
+      );
     } finally {
-      isPreviewPermissionPending = false;
+      setPreviewPendingValue(undefined);
       restorePreviewSwitch();
     }
   }
