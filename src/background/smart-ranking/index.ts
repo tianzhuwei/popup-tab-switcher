@@ -1,4 +1,5 @@
 import { ServiceFactory } from "../../service-factory";
+import { ITab } from "../../utils/check-tab";
 import {
   defaultSmartRankingConfig,
   defaultSmartRankingProviders,
@@ -17,6 +18,7 @@ import {
   getPublicTabMetadata,
   IDomainUsage,
   IRankingInput,
+  IRankingPlan,
 } from "./policy";
 
 const CONFIG_KEY = "smartRankingConfig";
@@ -37,6 +39,21 @@ interface ICachedRanking {
   createdAt: number;
 }
 
+interface IRankingSnapshot {
+  tabs: ITab[];
+  tabProbabilities: Record<string, number>;
+}
+
+interface IRankingFlight {
+  revision: number;
+  key: string;
+  signature: string;
+  priority: boolean;
+  preempted: boolean;
+  controller: AbortController;
+  promise: Promise<ICachedRanking | undefined>;
+}
+
 let config = { ...defaultSmartRankingConfig };
 let providers = normalizeSmartRankingProviders(undefined, config);
 let status: ISmartRankingStatus = {
@@ -46,6 +63,7 @@ let status: ISmartRankingStatus = {
 let initialization: Promise<void> | undefined;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let controller: AbortController | undefined;
+let flight: IRankingFlight | undefined;
 let refreshing = false;
 let revision = 0;
 let lastRequest = 0;
@@ -276,19 +294,37 @@ export async function getSmartRankingSnapshot(input: IRankingInput) {
   const fallback = {
     tabs: input.visibleTabs,
     tabProbabilities: {} as Record<string, number>,
+    pending: false,
   };
   if (!config.enabled) return fallback;
   const plan = createRankingPlan(input, usage);
   if (!plan) return fallback;
-  const prediction = cache.get(plan.key);
-  if (
-    !prediction ||
-    prediction.signature !== plan.signature ||
-    Date.now() - prediction.createdAt >= CACHE_DURATION
-  ) {
+  const prediction = getCachedPrediction(plan);
+  if (!prediction) {
     scheduleSmartRanking();
-    return fallback;
+    return { ...fallback, pending: true };
   }
+  return { ...createSnapshot(input, prediction), pending: false };
+}
+
+/** An explicit popup miss requests this opening's plan without the background delay. */
+export async function requestSmartRankingSnapshot(
+  input: IRankingInput
+): Promise<IRankingSnapshot | undefined> {
+  await initialize();
+  if (!config.enabled) return;
+  const requestedRevision = revision;
+  const plan = createRankingPlan(input, usage);
+  if (!plan) return;
+  const prediction = await requestPrediction(plan, true, requestedRevision);
+  if (!prediction || requestedRevision !== revision || !config.enabled) return;
+  return createSnapshot(input, prediction);
+}
+
+function createSnapshot(
+  input: IRankingInput,
+  prediction: ICachedRanking
+): IRankingSnapshot {
   const tabs = applyRanking(input, prediction.probabilities);
   const tabProbabilities: Record<string, number> = {};
   for (const tab of tabs) {
@@ -302,6 +338,17 @@ export async function getSmartRankingSnapshot(input: IRankingInput) {
       tabProbabilities[String(tab.id)] = probability;
   }
   return { tabs, tabProbabilities };
+}
+
+function getCachedPrediction(plan: IRankingPlan): ICachedRanking | undefined {
+  const prediction = cache.get(plan.key);
+  if (
+    prediction?.provider === config.provider &&
+    prediction.endpoint === config.endpoint &&
+    prediction.signature === plan.signature &&
+    Date.now() - prediction.createdAt < CACHE_DURATION
+  )
+    return prediction;
 }
 
 export function scheduleSmartRanking(): void {
@@ -357,69 +404,7 @@ async function refreshRanking(): Promise<void> {
     };
     const plan = createRankingPlan(input, usage);
     if (!plan) return;
-    const previous = cache.get(plan.key);
-    if (
-      previous?.signature === plan.signature &&
-      Date.now() - previous.createdAt < CACHE_DURATION
-    )
-      return;
-    const wait =
-      Math.max(lastRequest + REQUEST_INTERVAL, retryAfter) - Date.now();
-    if (wait > 0) {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        timer = undefined;
-        void refreshRanking();
-      }, wait);
-      return;
-    }
-    const requestController = new AbortController();
-    controller = requestController;
-    const timeout = setTimeout(() => requestController.abort(), 8000);
-    lastRequest = Date.now();
-    status = {
-      state: "waiting",
-      message: "Preparing predictions in the background…",
-    };
-    try {
-      const result = await requestTabRanking(
-        requestConfig,
-        plan.state,
-        plan.criteria,
-        requestController.signal
-      );
-      if (requestedRevision !== revision || !config.enabled) return;
-      cache.delete(plan.key);
-      cache.set(plan.key, {
-        provider: requestConfig.provider,
-        endpoint: requestConfig.endpoint,
-        signature: plan.signature,
-        ...result,
-        createdAt: Date.now(),
-      });
-      while (cache.size > MAX_CACHE_ENTRIES)
-        cache.delete(cache.keys().next().value!);
-      persistCache();
-      status = {
-        state: "ready",
-        message: "Prediction ready. Applies the next time the popup opens.",
-        updatedAt: Date.now(),
-      };
-    } catch (error) {
-      if (requestedRevision !== revision) return;
-      retryAfter = Date.now() + 60_000;
-      status = {
-        state: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Smart ranking is unavailable. Visit order is preserved.",
-      };
-    } finally {
-      clearTimeout(timeout);
-      controller = undefined;
-      if (config.enabled) scheduleSmartRanking();
-    }
+    await requestPrediction(plan, false, requestedRevision);
   } catch {
     if (requestedRevision !== revision) return;
     status = {
@@ -430,6 +415,138 @@ async function refreshRanking(): Promise<void> {
     refreshing = false;
     if (requestedRevision !== revision && config.enabled)
       scheduleSmartRanking();
+  }
+}
+
+async function requestPrediction(
+  plan: IRankingPlan,
+  priority: boolean,
+  requestedRevision: number
+): Promise<ICachedRanking | undefined> {
+  while (config.enabled && requestedRevision === revision) {
+    const previous = getCachedPrediction(plan);
+    if (previous) return previous;
+    const current = flight;
+    if (current) {
+      if (
+        current.revision === requestedRevision &&
+        current.key === plan.key &&
+        current.signature === plan.signature &&
+        !current.preempted
+      ) {
+        if (priority) current.priority = true;
+        return current.promise;
+      }
+      if (!priority) return;
+      if (!current.priority && !current.preempted) {
+        current.preempted = true;
+        current.controller.abort();
+      }
+      // Wait for cancellation/settlement before sending another model request.
+      await current.promise;
+      continue;
+    }
+    const wait =
+      Math.max(priority ? 0 : lastRequest + REQUEST_INTERVAL, retryAfter) -
+      Date.now();
+    if (wait > 0) {
+      if (!priority) {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          timer = undefined;
+          void refreshRanking();
+        }, wait);
+      }
+      return;
+    }
+    const next: IRankingFlight = {
+      revision: requestedRevision,
+      key: plan.key,
+      signature: plan.signature,
+      priority,
+      preempted: false,
+      controller: new AbortController(),
+      promise: Promise.resolve(undefined),
+    };
+    flight = next;
+    controller = next.controller;
+    const requestConfig = { ...config };
+    next.promise = Promise.resolve()
+      .then(() => runPrediction(next, requestConfig, plan))
+      .finally(() => {
+        if (flight === next) flight = undefined;
+        if (controller === next.controller) controller = undefined;
+        if (config.enabled) scheduleSmartRanking();
+      });
+    return next.promise;
+  }
+}
+
+async function runPrediction(
+  request: IRankingFlight,
+  requestConfig: ISmartRankingConfig,
+  plan: IRankingPlan
+): Promise<ICachedRanking | undefined> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const origin = getRankingPermissionOrigin(requestConfig);
+    const granted = await chrome.permissions.contains({ origins: [origin] });
+    if (request.revision !== revision || request.preempted || !config.enabled)
+      return;
+    if (!requestConfig.apiKey || !granted) {
+      cache.clear();
+      persistCache();
+      status = {
+        state: "unconfigured",
+        message:
+          "Save an API Key and grant provider access to enable predictions.",
+      };
+      return;
+    }
+    timeout = setTimeout(() => request.controller.abort(), 8000);
+    lastRequest = Date.now();
+    status = {
+      state: "waiting",
+      message: "Preparing predictions…",
+    };
+    const result = await requestTabRanking(
+      requestConfig,
+      plan.state,
+      plan.criteria,
+      request.controller.signal
+    );
+    if (request.revision !== revision || request.preempted || !config.enabled)
+      return;
+    const prediction: ICachedRanking = {
+      provider: requestConfig.provider,
+      endpoint: requestConfig.endpoint,
+      signature: plan.signature,
+      ...result,
+      createdAt: Date.now(),
+    };
+    cache.delete(plan.key);
+    cache.set(plan.key, prediction);
+    while (cache.size > MAX_CACHE_ENTRIES)
+      cache.delete(cache.keys().next().value!);
+    persistCache();
+    status = {
+      state: "ready",
+      message: "Prediction ready.",
+      updatedAt: Date.now(),
+    };
+    return prediction;
+  } catch (error) {
+    if (request.revision !== revision || request.preempted) return;
+    retryAfter = Date.now() + 60_000;
+    status = {
+      state: "error",
+      message:
+        error instanceof Error
+          ? error.message
+          : "Smart ranking is unavailable. Visit order is preserved.",
+    };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

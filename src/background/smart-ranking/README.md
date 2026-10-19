@@ -1,16 +1,22 @@
 # Smart ranking
 
 This module prepares optional predictions in the background. The popup reads a
-cached snapshot when it opens; completed requests never push a new order into an
-open popup. Without a matching prediction, the original visit order is used.
+cached snapshot when it opens. On a cache miss the list appears immediately in
+visit order, then requests a priority prediction. A matching result may update
+the current opening once, before further keyboard, pointer or scroll interaction
+locks both its order and probabilities. Closed or replaced openings ignore late
+results. The selected tab is preserved by ID and reordered rows use a short
+transform animation (skipped for reduced motion).
 
 - `policy.ts`: public-page eligibility, the 20-tab shortlist, context features,
   and promotion rules. This is the main place to change ranking behavior.
 - `model-client.ts`: System One requests, provider authentication/model names,
   and strict response validation. No SDK or generated-text parsing is needed.
 - `index.ts`: local domain-usage statistics, scheduling, configuration, bounded
-  session cache, and request cancellation. Requests are debounced, at least ten
-  seconds apart, and time out after eight seconds; failures back off one minute.
+  session cache, and request cancellation. Ordinary background requests are
+  debounced and at least ten seconds apart. An explicit popup miss skips those
+  delays, shares matching in-flight work and takes priority over prefetching.
+  Requests time out after eight seconds; failures back off one minute.
 - `../../utils/smart-ranking.ts`: configuration types and official endpoint
   validation shared with the settings page.
 

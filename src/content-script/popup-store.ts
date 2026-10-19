@@ -1,7 +1,9 @@
+import { batch } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import {
   closeTab,
   getModel,
+  IPopupRankingUpdate,
   sendMessageAndGetResponse,
   togglePinTab,
 } from "../utils/messages";
@@ -20,6 +22,7 @@ interface IStore {
 }
 
 export function createPopupStore() {
+  let hasRankingUpdate = false;
   const [store, setStore] = createStore<IStore>({
     tabs: [],
     isOpen: false,
@@ -40,8 +43,11 @@ export function createPopupStore() {
     setStore("isOpen", true);
   };
 
-  const syncStoreWithBackground = async (isCurrent = () => true) => {
-    const model = await sendMessageAndGetResponse(getModel());
+  const syncStoreWithBackground = async (
+    isCurrent = () => true,
+    popupId?: string
+  ) => {
+    const model = await sendMessageAndGetResponse(getModel(popupId));
     if (!isCurrent()) {
       return;
     }
@@ -51,7 +57,9 @@ export function createPopupStore() {
       pinnedTabIds: new Set(model.pinnedTabIds),
     });
     setStore("settings", reconcile(model.settings));
-    setStore("tabPreviewIds", reconcile(model.tabPreviewIds || []));
+    if (!store.isOpen) hasRankingUpdate = false;
+    if (!hasRankingUpdate)
+      setStore("tabPreviewIds", reconcile(model.tabPreviewIds || []));
 
     if (!store.isOpen) {
       // Keep this opening's order and probabilities stable across shortcut repeats.
@@ -69,6 +77,24 @@ export function createPopupStore() {
       setStore("selectedTabIndex", targetIndex);
     }
     return model;
+  };
+
+  const applyRankingUpdate = (update: IPopupRankingUpdate): boolean => {
+    const selectedTabId = store.tabs[store.selectedTabIndex]?.id;
+    const selectedTabIndex = update.tabs.findIndex(
+      (tab) => tab.id === selectedTabId
+    );
+    if (selectedTabId === undefined || selectedTabIndex === -1) {
+      return false;
+    }
+    hasRankingUpdate = true;
+    batch(() => {
+      setStore("tabs", reconcile(update.tabs));
+      setStore("tabProbabilities", reconcile(update.tabProbabilities));
+      setStore("tabPreviewIds", reconcile(update.tabPreviewIds));
+      setStore("selectedTabIndex", selectedTabIndex);
+    });
+    return true;
   };
 
   const togglePin = async (tabId: number) => {
@@ -122,6 +148,7 @@ export function createPopupStore() {
     closePopup,
     openPopup,
     syncStoreWithBackground,
+    applyRankingUpdate,
     selectNextTab,
     selectTabIndex,
     togglePin,

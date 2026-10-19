@@ -18,6 +18,7 @@ export enum Message {
   SetSettings = "SetSettings",
   GetSettings = "GetSettings",
   GET_MODEL = "GET_MODEL",
+  GetSmartRankingUpdate = "GetSmartRankingUpdate",
   SELECT_TAB = "SELECT_TAB",
   SWITCH_TAB = "SWITCH_TAB",
   TogglePinTab = "TogglePinTab",
@@ -66,8 +67,12 @@ export function contentScriptStopped() {
   return { type: Message.ContentScriptStopped } as const;
 }
 
-export function getModel() {
-  return { type: Message.GET_MODEL } as const;
+export function getModel(popupId?: string) {
+  return { type: Message.GET_MODEL, popupId } as const;
+}
+
+export function getSmartRankingUpdate(popupId: string) {
+  return { type: Message.GetSmartRankingUpdate, popupId } as const;
 }
 
 export function togglePinTab(tabId: number) {
@@ -117,6 +122,7 @@ interface IMessageTypeToObjectMap {
   [Message.SetSettings]: ReturnType<typeof setSettings>;
   [Message.GetSettings]: ReturnType<typeof getSettings>;
   [Message.GET_MODEL]: ReturnType<typeof getModel>;
+  [Message.GetSmartRankingUpdate]: ReturnType<typeof getSmartRankingUpdate>;
   [Message.SELECT_TAB]: ReturnType<typeof selectTab>;
   [Message.SWITCH_TAB]: ReturnType<typeof switchTab>;
   [Message.TogglePinTab]: ReturnType<typeof togglePinTab>;
@@ -141,12 +147,22 @@ interface IGetModelResponse {
   previousTabId: number | undefined;
   tabProbabilities: Record<string, number>;
   tabPreviewIds: number[];
+  rankingPending: boolean;
+}
+
+export interface IPopupRankingUpdate {
+  popupId: string;
+  tabs: chrome.tabs.Tab[];
+  tabProbabilities: Record<string, number>;
+  tabPreviewIds: number[];
 }
 
 type IMessageResponse<Message extends IMessage> = Message extends ReturnType<
   typeof getModel
 >
   ? IGetModelResponse
+  : Message extends ReturnType<typeof getSmartRankingUpdate>
+  ? IPopupRankingUpdate | undefined
   : Message extends ReturnType<typeof getSettings>
   ? ISettings
   : Message extends

@@ -7,6 +7,7 @@ interface IProps {
   zoomFactor: number;
   isDark: boolean;
   isEnhanced: boolean;
+  sessionRevision: number;
 }
 
 const CHANNEL = "popup-tab-switcher-preview";
@@ -17,6 +18,7 @@ export function TabPreview(props: IProps) {
   let token: string | undefined;
   let sessionOpenedAt = 0;
   let sessionPending = false;
+  let sessionRefreshRequested = false;
   let ready = false;
   let hasImage = false;
   let requestId = 0;
@@ -34,6 +36,10 @@ export function TabPreview(props: IProps) {
         publishTarget();
       }
     )
+  );
+
+  createEffect(
+    on(() => props.sessionRevision, requestSession, { defer: true })
   );
 
   createEffect(
@@ -67,6 +73,7 @@ export function TabPreview(props: IProps) {
     resizeObserver.disconnect();
     clearPreview();
     token = undefined;
+    sessionRefreshRequested = false;
   });
 
   return (
@@ -86,14 +93,20 @@ export function TabPreview(props: IProps) {
   }
 
   function requestSession() {
-    if (disposed || sessionPending) return;
+    if (disposed) return;
+    if (sessionPending) {
+      sessionRefreshRequested = true;
+      token = undefined;
+      clearPreview();
+      return;
+    }
     sessionPending = true;
     token = undefined;
     clearPreview();
     void sendMessageAndGetResponse(openTabPreview())
       .then(
         (session) => {
-          if (disposed) return;
+          if (disposed || sessionRefreshRequested) return;
           token = session;
           sessionOpenedAt = Date.now();
           publishTarget();
@@ -102,6 +115,10 @@ export function TabPreview(props: IProps) {
       )
       .finally(() => {
         sessionPending = false;
+        if (sessionRefreshRequested && !disposed) {
+          sessionRefreshRequested = false;
+          requestSession();
+        }
       });
   }
 

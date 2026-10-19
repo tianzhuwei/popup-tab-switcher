@@ -4,6 +4,7 @@ import {
   demoSettings,
   handleMessage,
   IHandlers,
+  IPopupRankingUpdate,
   Message,
   selectTab,
 } from "./utils/messages";
@@ -26,6 +27,7 @@ import {
   getSmartRankingSettings,
   getSmartRankingSnapshot,
   initSmartRanking,
+  requestSmartRankingSnapshot,
   resetSmartRanking,
   saveSmartRankingConfig,
   scheduleSmartRanking,
@@ -35,12 +37,25 @@ import {
   defaultSmartRankingConfig,
   normalizeSmartRankingProviders,
 } from "./utils/smart-ranking";
+import { IRankingInput } from "./background/smart-ranking/policy";
+import { ISettings } from "./utils/settings";
+import TabRegistry from "./utils/tab-registry";
 
 type ChromeTab = chrome.tabs.Tab;
 type IPort = chrome.runtime.Port;
 const suppressAutoSwitchTabIds = new Set<number>();
 const CLOSE_TAB_MENU_ID = "close-current-tab";
-const popupSnapshots = new Map<number, { tabIds?: number[] }>();
+interface IPopupSnapshot {
+  popupId?: string;
+  ownerUrl?: string;
+  documentId?: string;
+  tabIds?: number[];
+  rankingInput?: IRankingInput;
+  rankingFingerprint?: string;
+  rankingUpdate?: Promise<IPopupRankingUpdate | undefined>;
+}
+
+const popupSnapshots = new Map<number, IPopupSnapshot>();
 
 // Tracks the requested tab while asynchronous activation events arrive.
 let tabIdToBeActivated: undefined | number;
@@ -342,30 +357,33 @@ function messageHandlers(): Partial<IHandlers> {
         notifyPreviewPopupHidden(active.id);
       }
     },
-    [Message.GET_MODEL]: async (_m, sender) => {
+    [Message.GET_MODEL]: async ({ popupId }, sender) => {
       const ownerId = sender.frameId === 0 ? sender.tab?.id : undefined;
-      const snapshot: { tabIds?: number[] } | undefined =
-        ownerId === undefined ? undefined : popupSnapshots.get(ownerId) || {};
+      const validPopupId =
+        typeof popupId === "string" &&
+        popupId.length > 0 &&
+        popupId.length <= 128
+          ? popupId
+          : undefined;
+      const existing =
+        ownerId === undefined ? undefined : popupSnapshots.get(ownerId);
+      const snapshot: IPopupSnapshot | undefined =
+        ownerId === undefined
+          ? undefined
+          : existing && (!validPopupId || existing.popupId === validPopupId)
+          ? existing
+          : {
+              popupId: validPopupId,
+              ownerUrl: sender.url,
+              documentId: sender.documentId,
+            };
       if (ownerId !== undefined && snapshot)
         popupSnapshots.set(ownerId, snapshot);
       const settings = await ServiceFactory.getSettings();
       const registry = await ServiceFactory.getTabRegistry();
       const senderWindowId = sender.tab?.windowId;
-      const isInScope = (tab: ITab) =>
-        settings.isShowingTabsFromAllWindows || tab.windowId === senderWindowId;
-      const recentTabs = registry.getTabs().filter(isInScope);
-      const activeTab = recentTabs[recentTabs.length - 1];
-      const previousTab = recentTabs[recentTabs.length - 2];
-      const ranked = await getSmartRankingSnapshot({
-        recentTabs: recentTabs.slice().reverse(),
-        visibleTabs: registry.getTabsToShow(isInScope),
-        pinnedTabIds: registry.getPinnedTabIds(),
-        activeTabId: activeTab?.id,
-        previousTabId: previousTab?.id,
-        scope: settings.isShowingTabsFromAllWindows
-          ? "all"
-          : String(senderWindowId),
-      });
+      const input = getPopupRankingInput(registry, settings, senderWindowId);
+      const ranked = await getSmartRankingSnapshot(input);
       if (
         ownerId !== undefined &&
         snapshot &&
@@ -373,10 +391,15 @@ function messageHandlers(): Partial<IHandlers> {
         !snapshot.tabIds
       ) {
         snapshot.tabIds = ranked.tabs.map((tab) => tab.id);
+        if (ranked.pending && validPopupId) {
+          snapshot.rankingInput = input;
+          snapshot.rankingFingerprint = getRankingFingerprint(input);
+        }
       }
       return {
         tabs: ranked.tabs as chrome.tabs.Tab[],
         tabProbabilities: ranked.tabProbabilities,
+        rankingPending: ranked.pending,
         tabPreviewIds:
           settings.isTabPreviewEnabled && !settings.isTabPreviewAutoEnabled
             ? await getAvailableTabPreviewIds(ranked.tabs)
@@ -387,9 +410,29 @@ function messageHandlers(): Partial<IHandlers> {
             ? await chrome.tabs.getZoom(sender.tab.id)
             : await chrome.tabs.getZoom(),
         pinnedTabIds: registry.getPinnedTabIds(),
-        activeTabId: activeTab?.id,
-        previousTabId: previousTab?.id,
+        activeTabId: input.activeTabId,
+        previousTabId: input.previousTabId,
       };
+    },
+    [Message.GetSmartRankingUpdate]: async ({ popupId }, sender) => {
+      const ownerId = sender.frameId === 0 ? sender.tab?.id : undefined;
+      if (sender.id !== chrome.runtime.id || ownerId === undefined) return;
+      const snapshot = popupSnapshots.get(ownerId);
+      if (
+        !snapshot ||
+        snapshot.popupId !== popupId ||
+        !snapshot.rankingInput ||
+        snapshot.ownerUrl !== sender.url ||
+        snapshot.documentId !== sender.documentId
+      )
+        return;
+      if (!snapshot.rankingUpdate) {
+        snapshot.rankingUpdate = preparePopupRankingUpdate(
+          ownerId,
+          snapshot
+        ).catch(() => undefined);
+      }
+      return snapshot.rankingUpdate;
     },
     [Message.TogglePinTab]: async ({ tabId }) => {
       const registry = await ServiceFactory.getTabRegistry();
@@ -487,6 +530,77 @@ function messageHandlers(): Partial<IHandlers> {
       }
       return testSmartRankingConfig(config);
     },
+  };
+}
+
+function getPopupRankingInput(
+  registry: TabRegistry,
+  settings: ISettings,
+  windowId?: number
+): IRankingInput {
+  const isInScope = (tab: ITab) =>
+    settings.isShowingTabsFromAllWindows || tab.windowId === windowId;
+  const recentTabs = registry.getTabs().filter(isInScope).reverse();
+  return {
+    recentTabs,
+    visibleTabs: registry.getTabsToShow(isInScope),
+    pinnedTabIds: registry.getPinnedTabIds(),
+    activeTabId: recentTabs[0]?.id,
+    previousTabId: recentTabs[1]?.id,
+    scope: settings.isShowingTabsFromAllWindows ? "all" : String(windowId),
+  };
+}
+
+function getRankingFingerprint(input: IRankingInput): string {
+  return JSON.stringify([
+    input.scope,
+    input.activeTabId,
+    input.previousTabId,
+    input.pinnedTabIds,
+    input.visibleTabs.map((tab) => tab.id),
+    input.recentTabs.map((tab) => [tab.id, tab.url, tab.title, tab.incognito]),
+  ]);
+}
+
+async function preparePopupRankingUpdate(
+  ownerId: number,
+  snapshot: IPopupSnapshot
+): Promise<IPopupRankingUpdate | undefined> {
+  const input = snapshot.rankingInput;
+  if (!input || !snapshot.popupId) return;
+  const ranked = await requestSmartRankingSnapshot(input);
+  if (!ranked || popupSnapshots.get(ownerId) !== snapshot) return;
+  const [owner, settings, registry] = await Promise.all([
+    chrome.tabs.get(ownerId),
+    ServiceFactory.getSettings(),
+    ServiceFactory.getTabRegistry(),
+  ]);
+  if (
+    popupSnapshots.get(ownerId) !== snapshot ||
+    !owner.active ||
+    owner.url !== snapshot.ownerUrl ||
+    getRankingFingerprint(
+      getPopupRankingInput(registry, settings, owner.windowId)
+    ) !== snapshot.rankingFingerprint
+  )
+    return;
+  const tabPreviewIds =
+    settings.isTabPreviewEnabled && !settings.isTabPreviewAutoEnabled
+      ? await getAvailableTabPreviewIds(ranked.tabs)
+      : [];
+  if (popupSnapshots.get(ownerId) !== snapshot) return;
+  // A locked popup can retain its initial rows; preview sessions may serve either snapshot.
+  snapshot.tabIds = [
+    ...new Set([
+      ...(snapshot.tabIds || []),
+      ...ranked.tabs.map((tab) => tab.id),
+    ]),
+  ];
+  return {
+    popupId: snapshot.popupId,
+    tabs: ranked.tabs,
+    tabProbabilities: ranked.tabProbabilities,
+    tabPreviewIds,
   };
 }
 

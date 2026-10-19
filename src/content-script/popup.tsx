@@ -6,8 +6,10 @@ import {
   contentScriptStopped,
   closeTabPreview,
   createTab,
+  getSmartRankingUpdate,
   handleMessage,
   Message,
+  sendMessageAndGetResponse,
   switchTab,
 } from "../utils/messages";
 import { log } from "../utils/logger";
@@ -25,10 +27,20 @@ interface IProps {
   element: HTMLElement;
 }
 
+interface IRankingOpening {
+  id: string;
+  startedAt: number;
+  locked: boolean;
+  updateRequested: boolean;
+  updateApplied: boolean;
+  ignoreLayoutScroll: boolean;
+}
+
 function Popup({ element }: IProps) {
   const {
     store,
     syncStoreWithBackground,
+    applyRankingUpdate,
     openPopup,
     closePopup: closeStorePopup,
     selectNextTab,
@@ -44,6 +56,7 @@ function Popup({ element }: IProps) {
   const [isVisible, setIsVisible] = createSignal(false);
   const [previewHoveredTabId, setPreviewHoveredTabId] = createSignal<number>();
   const [previewFocusedTabId, setPreviewFocusedTabId] = createSignal<number>();
+  const [previewSessionRevision, setPreviewSessionRevision] = createSignal(0);
   const isManualPreviewEnabled = () =>
     store.settings.isTabPreviewEnabled &&
     !store.settings.isTabPreviewAutoEnabled;
@@ -68,6 +81,12 @@ function Popup({ element }: IProps) {
   let isDisposed = false;
   let popupRequestGeneration = 0;
   let pendingPopupRequests = Promise.resolve();
+  let rankingOpening: IRankingOpening | undefined;
+  let rankingAnimationFrame: number | undefined;
+  let rankingOpeningFrame: number | undefined;
+  const rankingAnimations = new Set<Animation>();
+  let isRankingHoverSuppressed = false;
+  let lastPointerPosition: { x: number; y: number } | undefined;
   // Stores the last active element before the popup was opened.
   const selectionAndFocus = new SelectionAndFocus();
   let cleanUpListeners = () => {};
@@ -110,6 +129,9 @@ function Popup({ element }: IProps) {
     isDisposed = true;
     popupRequestGeneration += 1;
     pendingPopupRequests = Promise.resolve();
+    rankingOpening = undefined;
+    cancelRankingMotion();
+    cancelRankingOpeningFrame();
     popupTransition += 1;
     cancelPopupAnimation();
     cancelRowAnimations();
@@ -192,6 +214,12 @@ function Popup({ element }: IProps) {
     })
   );
 
+  createEffect(
+    on(isReducedMotion, (reduced) => {
+      if (reduced) cancelRankingMotion();
+    })
+  );
+
   return (
     <>
       <style>{styles}</style>
@@ -226,7 +254,7 @@ function Popup({ element }: IProps) {
                       store.tabPreviewIds.includes(tab.id)
                     }
                     onPreviewHover={(hovered) => {
-                      if (hovered) {
+                      if (hovered && !isRankingHoverSuppressed) {
                         setPreviewHoveredTabId(tab.id);
                       } else if (previewHoveredTabId() === tab.id) {
                         setPreviewHoveredTabId(undefined);
@@ -247,7 +275,8 @@ function Popup({ element }: IProps) {
                     onHover={() => {
                       if (
                         store.settings.isHoverSelectingTab &&
-                        isHoverSelectionReady
+                        isHoverSelectionReady &&
+                        !isRankingHoverSuppressed
                       ) {
                         selectTabIndex(index());
                       }
@@ -300,6 +329,7 @@ function Popup({ element }: IProps) {
               zoomFactor={store.zoomFactor}
               isDark={isDark()}
               isEnhanced={store.settings.isVisualEffectsEnabled}
+              sessionRevision={previewSessionRevision()}
             />
           </Show>
         </div>
@@ -560,6 +590,109 @@ function Popup({ element }: IProps) {
     });
   }
 
+  function cancelRankingMotion() {
+    if (rankingAnimationFrame !== undefined) {
+      cancelAnimationFrame(rankingAnimationFrame);
+      rankingAnimationFrame = undefined;
+    }
+    for (const animation of rankingAnimations) {
+      animation.onfinish = null;
+      animation.cancel();
+    }
+    rankingAnimations.clear();
+  }
+
+  function cancelRankingOpeningFrame() {
+    if (rankingOpeningFrame !== undefined) {
+      cancelAnimationFrame(rankingOpeningFrame);
+      rankingOpeningFrame = undefined;
+    }
+  }
+
+  function ignoreRankingLayoutScroll(opening: IRankingOpening) {
+    cancelRankingOpeningFrame();
+    opening.ignoreLayoutScroll = true;
+    rankingOpeningFrame = requestAnimationFrame(() => {
+      rankingOpeningFrame = undefined;
+      if (rankingOpening === opening) opening.ignoreLayoutScroll = false;
+    });
+  }
+
+  function lockRankingOrder() {
+    if (!rankingOpening) return;
+    rankingOpening.locked = true;
+    rankingOpening.ignoreLayoutScroll = false;
+    cancelRankingMotion();
+    cancelRankingOpeningFrame();
+  }
+
+  function requestRankingUpdate(opening: IRankingOpening) {
+    if (opening.updateRequested) return;
+    opening.updateRequested = true;
+    void sendMessageAndGetResponse(getSmartRankingUpdate(opening.id))
+      .then((update) => {
+        if (
+          !update ||
+          update.popupId !== opening.id ||
+          rankingOpening !== opening ||
+          opening.locked ||
+          opening.updateApplied ||
+          isDisposed ||
+          !store.isOpen
+        )
+          return;
+        const previousPositions = new Map<number, number>();
+        element.shadowRoot
+          ?.querySelectorAll<HTMLElement>(".tab")
+          .forEach((tab) => {
+            const id = Number(tab.dataset.tabId);
+            if (Number.isFinite(id)) previousPositions.set(id, tab.offsetTop);
+          });
+        isRankingHoverSuppressed = true;
+        resetManualPreview();
+        ignoreRankingLayoutScroll(opening);
+        if (!applyRankingUpdate(update)) {
+          isRankingHoverSuppressed = false;
+          return;
+        }
+        opening.updateApplied = true;
+        // Existing preview tokens only cover the original rows.
+        setPreviewSessionRevision((value) => value + 1);
+        if (isReducedMotion()) return;
+        rankingAnimationFrame = requestAnimationFrame(() => {
+          rankingAnimationFrame = undefined;
+          if (
+            rankingOpening !== opening ||
+            opening.locked ||
+            !store.isOpen ||
+            isDisposed ||
+            isReducedMotion()
+          )
+            return;
+          element.shadowRoot
+            ?.querySelectorAll<HTMLElement>(".tab")
+            .forEach((tab) => {
+              const previous = previousPositions.get(Number(tab.dataset.tabId));
+              const deltaY =
+                previous !== undefined
+                  ? previous - tab.offsetTop
+                  : tab.offsetHeight / 2;
+              if (Math.abs(deltaY) < 0.5) return;
+              const animation = tab.animate(
+                [
+                  { transform: `translateY(${deltaY}px)` },
+                  { transform: "translateY(0)" },
+                ],
+                { duration: 160, easing: "cubic-bezier(0.2, 0.75, 0.25, 1)" }
+              );
+              rankingAnimations.add(animation);
+              animation.onfinish = () => rankingAnimations.delete(animation);
+            });
+        });
+      })
+      .catch((error) => log("[Late smart ranking unavailable]", error));
+  }
+
   function hideOverlay() {
     cancelPopupAnimation();
     setIsVisible(false);
@@ -575,7 +708,7 @@ function Popup({ element }: IProps) {
     const isCurrent = () =>
       !isDisposed && generation === popupRequestGeneration && store.isOpen;
     if (isCurrent()) {
-      await syncStoreWithBackground(isCurrent);
+      await syncStoreWithBackground(isCurrent, rankingOpening?.id);
       if (isCurrent()) {
         setStylePropertiesThatDependOnPageZoom();
         updatePopupPosition();
@@ -587,6 +720,10 @@ function Popup({ element }: IProps) {
     // Invalidate the whole opening cycle, including requests still waiting to sync.
     popupRequestGeneration += 1;
     pendingPopupRequests = Promise.resolve();
+    rankingOpening = undefined;
+    cancelRankingMotion();
+    cancelRankingOpeningFrame();
+    isRankingHoverSuppressed = false;
     isSettingsDemo = false;
     resetManualPreview();
     if (!isDisposed) {
@@ -601,18 +738,36 @@ function Popup({ element }: IProps) {
   }
 
   function requestPopup(increment?: number) {
+    const previousOpening = rankingOpening;
+    const opening = previousOpening || {
+      id: uuid(),
+      startedAt: performance.now(),
+      locked: false,
+      updateRequested: false,
+      updateApplied: false,
+      ignoreLayoutScroll: false,
+    };
+    rankingOpening = opening;
+    if (!previousOpening) isRankingHoverSuppressed = true;
+    if (previousOpening && increment !== undefined) lockRankingOrder();
     const generation = popupRequestGeneration;
     const isCurrent = () =>
-      !isDisposed && generation === popupRequestGeneration;
+      !isDisposed &&
+      generation === popupRequestGeneration &&
+      rankingOpening === opening;
     // Preserve every repeat in arrival order, rather than replacing earlier requests.
     const request = pendingPopupRequests.then(async () => {
       if (!isCurrent()) {
         return;
       }
       isSettingsDemo = increment === undefined;
-      const model = await syncStoreWithBackground(isCurrent);
+      const wasOpen = store.isOpen;
+      const model = await syncStoreWithBackground(isCurrent, opening.id);
       if (!model || !isCurrent()) {
         return;
+      }
+      if (!wasOpen && (!model.rankingPending || increment === undefined)) {
+        isRankingHoverSuppressed = false;
       }
       if (increment !== undefined) {
         if (store.isOpen) {
@@ -629,7 +784,10 @@ function Popup({ element }: IProps) {
           }
         }
       }
+      if (!wasOpen) ignoreRankingLayoutScroll(opening);
       openPopup();
+      if (!wasOpen && increment !== undefined && model.rankingPending)
+        requestRankingUpdate(opening);
     });
     // A failed request must not prevent later shortcuts from being processed.
     pendingPopupRequests = request.catch(() => {});
@@ -659,6 +817,26 @@ function Popup({ element }: IProps) {
       passive: true,
     });
     window.addEventListener("pointerout", onPointerOut, { capture: true });
+    window.addEventListener("pointerdown", onRankingInteraction, {
+      capture: true,
+      passive: true,
+    });
+    window.addEventListener("click", onRankingInteraction, {
+      capture: true,
+      passive: true,
+    });
+    window.addEventListener("wheel", onRankingInteraction, {
+      capture: true,
+      passive: true,
+    });
+    window.addEventListener("scroll", onRankingScroll, {
+      capture: true,
+      passive: true,
+    });
+    element.shadowRoot?.addEventListener("scroll", onRankingScroll, {
+      capture: true,
+      passive: true,
+    });
     document.addEventListener("visibilitychange", clearMousePosition);
 
     const messageListener = handleMessage({
@@ -681,6 +859,19 @@ function Popup({ element }: IProps) {
         capture: true,
       });
       window.removeEventListener("pointerout", onPointerOut, { capture: true });
+      window.removeEventListener("pointerdown", onRankingInteraction, {
+        capture: true,
+      });
+      window.removeEventListener("click", onRankingInteraction, {
+        capture: true,
+      });
+      window.removeEventListener("wheel", onRankingInteraction, {
+        capture: true,
+      });
+      window.removeEventListener("scroll", onRankingScroll, { capture: true });
+      element.shadowRoot?.removeEventListener("scroll", onRankingScroll, {
+        capture: true,
+      });
       document.removeEventListener("visibilitychange", clearMousePosition);
       chrome.runtime.onMessage.removeListener(messageListener);
       disposeFixUnfocusedDocumentInPdfFiles();
@@ -690,6 +881,15 @@ function Popup({ element }: IProps) {
   function onPointerMove(event: PointerEvent) {
     if (!event.isTrusted) {
       return;
+    }
+    const hasMoved = lastPointerPosition
+      ? event.clientX !== lastPointerPosition.x ||
+        event.clientY !== lastPointerPosition.y
+      : event.movementX !== 0 || event.movementY !== 0;
+    lastPointerPosition = { x: event.clientX, y: event.clientY };
+    if (hasMoved) {
+      onRankingInteraction(event);
+      isRankingHoverSuppressed = false;
     }
     mousePosition =
       event.pointerType === "mouse"
@@ -708,6 +908,22 @@ function Popup({ element }: IProps) {
     ) {
       isHoverSelectionReady = true;
     }
+  }
+
+  function onRankingInteraction(event: Event) {
+    if (
+      event.isTrusted &&
+      rankingOpening &&
+      event.timeStamp >= rankingOpening.startedAt
+    ) {
+      lockRankingOrder();
+    }
+  }
+
+  function onRankingScroll(event: Event) {
+    // Initial focus and row replacement can scroll without a user gesture.
+    // Wheel, pointer and key input still lock immediately during this frame.
+    if (!rankingOpening?.ignoreLayoutScroll) onRankingInteraction(event);
   }
 
   function onPointerOut(event: PointerEvent) {
@@ -741,6 +957,7 @@ function Popup({ element }: IProps) {
     if (isDisposed) {
       return;
     }
+    onRankingInteraction(event);
     if (!store.isOpen) {
       if (event.key === "Escape") {
         closePopup();
