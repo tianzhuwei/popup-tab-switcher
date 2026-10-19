@@ -44,7 +44,9 @@ $settings-dark-secondary: #d3c1f5;
     // popup surface including the four outer corners.
     background-color: var(--settings-background-color);
     border-radius: 12px;
-    overflow: hidden;
+    max-height: 600px;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
 }
 
@@ -205,10 +207,12 @@ $settings-dark-secondary: #d3c1f5;
 
   &__title {
     flex: 1;
+    min-width: 0;
     font-size: 14px;
     font-weight: 600;
     color: var(--settings-text-primary);
     letter-spacing: -0.01em;
+    white-space: nowrap;
   }
 
   &__chevron {
@@ -224,7 +228,7 @@ $settings-dark-secondary: #d3c1f5;
   &__body {
     padding: 4px 8px 8px;
     border-top: 1px solid var(--settings-border-color);
-    // Only the section content scrolls, not the whole settings panel.
+    // Bound section scrolling; the outer panel also scrolls when needed.
     max-height: 320px;
     overflow-y: auto;
     overflow-x: hidden;

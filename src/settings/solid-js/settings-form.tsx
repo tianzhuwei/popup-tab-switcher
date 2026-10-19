@@ -1,5 +1,5 @@
 import { Show, For } from "solid-js/web";
-import { createSignal } from "solid-js";
+import { createEffect, createSignal, JSX } from "solid-js";
 import { ISettingsStoreObject } from "./settings-store";
 import { MBanner } from "./components/m-banner/m-banner";
 import styles from "./settings.module.scss";
@@ -27,6 +27,8 @@ interface IThemeOption {
   icon: string;
 }
 
+type SettingsSection = "behavior" | "smart-ranking" | "appearance" | "advanced";
+
 const themeOptions: IThemeOption[] = [
   { value: "auto", label: "Auto", icon: "brightness_auto" },
   { value: "light", label: "Light", icon: "wb_sunny" },
@@ -45,16 +47,25 @@ const positionOptions: { value: PopupPosition; label: string; icon: string }[] =
 function Section(props: {
   icon: string;
   title: string;
-  defaultOpen?: boolean;
-  children: any;
+  isOpen: boolean;
+  onToggle: () => void;
+  children: JSX.Element;
 }) {
-  const [open, setOpen] = createSignal(props.defaultOpen ?? false);
+  // Keep drafts mounted when another section opens.
+  const [hasOpened, setHasOpened] = createSignal(props.isOpen);
+  createEffect(() => {
+    if (props.isOpen) setHasOpened(true);
+  });
   return (
-    <div class={styles.section} classList={{ [styles.section_open]: open() }}>
+    <div
+      class={styles.section}
+      classList={{ [styles.section_open]: props.isOpen }}
+    >
       <button
         type="button"
         class={styles.section__header}
-        onClick={() => setOpen(!open())}
+        onClick={props.onToggle}
+        aria-expanded={props.isOpen}
       >
         <i class={styles.iconInLabel}>{props.icon}</i>
         <span class={styles.section__title}>{props.title}</span>
@@ -62,8 +73,10 @@ function Section(props: {
           expand_more
         </i>
       </button>
-      <Show when={open()}>
-        <div class={styles.section__body}>{props.children}</div>
+      <Show when={hasOpened()}>
+        <div class={styles.section__body} hidden={!props.isOpen}>
+          {props.children}
+        </div>
       </Show>
     </div>
   );
@@ -74,6 +87,9 @@ function Row(props: { children: any }) {
 }
 
 export function SettingsForm(props: IProps) {
+  const [expandedSection, setExpandedSection] = createSignal<
+    SettingsSection | undefined
+  >("behavior");
   const [previewPendingValue, setPreviewPendingValue] = createSignal<boolean>();
   const [previewPermissionError, setPreviewPermissionError] = createSignal("");
 
@@ -138,7 +154,12 @@ export function SettingsForm(props: IProps) {
       </div>
 
       {/* Behavior */}
-      <Section icon="tune" title="Behavior" defaultOpen={true}>
+      <Section
+        icon="tune"
+        title="Behavior"
+        isOpen={expandedSection() === "behavior"}
+        onToggle={() => toggleSection("behavior")}
+      >
         <Row>
           <label
             for="isSwitchingToPreviouslyUsedTab"
@@ -209,12 +230,22 @@ export function SettingsForm(props: IProps) {
         </Row>
       </Section>
 
-      <Section icon="auto_awesome" title="Smart ranking">
-        <SmartRankingSettings />
+      <Section
+        icon="sort"
+        title="Smart ranking"
+        isOpen={expandedSection() === "smart-ranking"}
+        onToggle={() => toggleSection("smart-ranking")}
+      >
+        <SmartRankingSettings active={expandedSection() === "smart-ranking"} />
       </Section>
 
       {/* Appearance (layout in px) */}
-      <Section icon="straighten" title="Appearance">
+      <Section
+        icon="straighten"
+        title="Appearance"
+        isOpen={expandedSection() === "appearance"}
+        onToggle={() => toggleSection("appearance")}
+      >
         <Row>
           <label
             for="isTabPreviewEnabled"
@@ -386,7 +417,12 @@ export function SettingsForm(props: IProps) {
       </Section>
 
       {/* Advanced */}
-      <Section icon="speed" title="Advanced">
+      <Section
+        icon="speed"
+        title="Advanced"
+        isOpen={expandedSection() === "advanced"}
+        onToggle={() => toggleSection("advanced")}
+      >
         <Row>
           <label for="textScrollDelay" class={styles.settings__label}>
             <i class={styles.iconInLabel}>timer</i>
@@ -427,6 +463,12 @@ export function SettingsForm(props: IProps) {
       </Section>
     </form>
   );
+
+  function toggleSection(section: SettingsSection) {
+    setExpandedSection((current) =>
+      current === section ? undefined : section
+    );
+  }
 
   function toggleTabPreviews() {
     if (previewPendingValue() !== undefined) return;

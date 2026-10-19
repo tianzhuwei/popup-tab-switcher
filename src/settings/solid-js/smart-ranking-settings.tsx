@@ -19,7 +19,11 @@ const defaultEndpoints = {
   jev: "https://api.typesafe.ai/v1/systemone",
 };
 
-export function SmartRankingSettings() {
+interface IProps {
+  active: boolean;
+}
+
+export function SmartRankingSettings(props: IProps) {
   const [config, setConfig] = createSignal<ISmartRankingConfig>({
     ...defaultSmartRankingConfig,
   });
@@ -44,10 +48,10 @@ export function SmartRankingSettings() {
   });
 
   return (
-    <>
-      <div class={styles.settings__row}>
+    <div class={rankingStyles.settings}>
+      <div class={`${styles.settings__row} ${rankingStyles.toggleRow}`}>
         <label for="smartRankingEnabled" class={styles.settings__label}>
-          <i class={styles.iconInLabel}>auto_awesome</i>
+          <i class={styles.iconInLabel}>sort</i>
           Smart ranking
         </label>
         <MSwitch
@@ -127,7 +131,7 @@ export function SmartRankingSettings() {
           {error()}
         </p>
       </Show>
-    </>
+    </div>
   );
 
   function updateConfig(change: Partial<ISmartRankingConfig>) {
@@ -160,20 +164,33 @@ export function SmartRankingSettings() {
   }
 
   async function refreshStatus() {
-    if (pending() || dirty || statusPending || disposed) return;
+    if (!props.active || pending() || dirty || statusPending || disposed)
+      return;
     statusPending = true;
     const revision = settingsRevision;
     try {
       const settings: ISmartRankingSettings | undefined =
         await chrome.runtime.sendMessage(getSmartRankingSettings());
-      if (pending() || dirty || disposed || revision !== settingsRevision)
+      if (
+        !props.active ||
+        pending() ||
+        dirty ||
+        disposed ||
+        revision !== settingsRevision
+      )
         return;
       if (!settings?.status) {
         throw new Error("No smart ranking status response.");
       }
       applyStatus(settings.status);
     } catch (reason) {
-      if (!pending() && !dirty && !disposed && revision === settingsRevision) {
+      if (
+        props.active &&
+        !pending() &&
+        !dirty &&
+        !disposed &&
+        revision === settingsRevision
+      ) {
         setError(`Could not refresh smart ranking status: ${String(reason)}`);
       }
     } finally {
