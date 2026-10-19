@@ -283,7 +283,7 @@
   width: calc(var(--popup-unit) * 24);
   height: calc(var(--popup-unit) * 24);
   margin-left: calc(var(--popup-unit) * 6);
-  opacity: 0.6;
+  opacity: 0;
 
   &:hover {
     background-color: var(--tab-button-hover-background);
