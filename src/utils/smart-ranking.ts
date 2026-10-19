@@ -7,6 +7,16 @@ export interface ISmartRankingConfig {
   apiKey: string;
 }
 
+export interface ISmartRankingProviderConfig {
+  endpoint: string;
+  apiKey: string;
+}
+
+export type ISmartRankingProviders = Record<
+  RankingProvider,
+  ISmartRankingProviderConfig
+>;
+
 export interface ISmartRankingStatus {
   state: "off" | "unconfigured" | "waiting" | "ready" | "error";
   message: string;
@@ -15,14 +25,31 @@ export interface ISmartRankingStatus {
 
 export interface ISmartRankingSettings {
   config: ISmartRankingConfig;
+  providers: ISmartRankingProviders;
   status: ISmartRankingStatus;
 }
+
+export interface ISmartRankingTestResult {
+  ok: boolean;
+  message: string;
+  elapsedMs?: number;
+}
+
+export const defaultSmartRankingProviders: ISmartRankingProviders = {
+  bailian: {
+    endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1/systemone",
+    apiKey: "",
+  },
+  jev: {
+    endpoint: "https://api.typesafe.ai/v1/systemone",
+    apiKey: "",
+  },
+};
 
 export const defaultSmartRankingConfig: ISmartRankingConfig = {
   enabled: false,
   provider: "bailian",
-  endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1/systemone",
-  apiKey: "",
+  ...defaultSmartRankingProviders.bailian,
 };
 
 export function normalizeSmartRankingConfig(
@@ -39,11 +66,44 @@ export function normalizeSmartRankingConfig(
     endpoint:
       typeof config.endpoint === "string"
         ? config.endpoint.trim()
-        : provider === "jev"
-        ? "https://api.typesafe.ai/v1/systemone"
-        : defaultSmartRankingConfig.endpoint,
+        : defaultSmartRankingProviders[provider].endpoint,
     apiKey: typeof config.apiKey === "string" ? config.apiKey.trim() : "",
   };
+}
+
+export function normalizeSmartRankingProviders(
+  value: unknown,
+  config: ISmartRankingConfig,
+  fallback: ISmartRankingProviders = defaultSmartRankingProviders
+): ISmartRankingProviders {
+  const saved =
+    typeof value === "object" && value !== null && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  function normalize(provider: RankingProvider): ISmartRankingProviderConfig {
+    const entry = saved[provider];
+    const profile =
+      typeof entry === "object" && entry !== null && !Array.isArray(entry)
+        ? (entry as Record<string, unknown>)
+        : {};
+    return {
+      endpoint:
+        typeof profile.endpoint === "string"
+          ? profile.endpoint.trim()
+          : fallback[provider].endpoint,
+      apiKey:
+        typeof profile.apiKey === "string"
+          ? profile.apiKey.trim()
+          : fallback[provider].apiKey,
+    };
+  }
+  const providers = { bailian: normalize("bailian"), jev: normalize("jev") };
+  // The active config also migrates installations with only one saved key.
+  providers[config.provider] = {
+    endpoint: config.endpoint,
+    apiKey: config.apiKey,
+  };
+  return providers;
 }
 
 export function getRankingPermissionOrigin(

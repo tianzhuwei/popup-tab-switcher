@@ -117,3 +117,9 @@
     cursor: default;
   }
 }
+
+.buttons {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}

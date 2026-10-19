@@ -29,7 +29,11 @@ import {
   saveSmartRankingConfig,
   scheduleSmartRanking,
 } from "./background/smart-ranking";
-import { defaultSmartRankingConfig } from "./utils/smart-ranking";
+import { testSmartRankingConfig } from "./background/smart-ranking/connection-test";
+import {
+  defaultSmartRankingConfig,
+  normalizeSmartRankingProviders,
+} from "./utils/smart-ranking";
 
 type ChromeTab = chrome.tabs.Tab;
 type IPort = chrome.runtime.Port;
@@ -465,9 +469,18 @@ function messageHandlers(): Partial<IHandlers> {
       if (!isRankingSettingsSender(sender)) return deniedRankingSettings();
       return getSmartRankingSettings();
     },
-    [Message.SetSmartRankingConfig]: async ({ config }, sender) => {
+    [Message.SetSmartRankingConfig]: async ({ config, providers }, sender) => {
       if (!isRankingSettingsSender(sender)) return deniedRankingSettings();
-      return saveSmartRankingConfig(config);
+      return saveSmartRankingConfig(config, providers);
+    },
+    [Message.TestSmartRankingConfig]: async ({ config }, sender) => {
+      if (!isRankingSettingsSender(sender)) {
+        return {
+          ok: false,
+          message: "Open the extension settings to test smart ranking.",
+        };
+      }
+      return testSmartRankingConfig(config);
     },
   };
 }
@@ -485,6 +498,10 @@ function isRankingSettingsSender(
 function deniedRankingSettings() {
   return {
     config: { ...defaultSmartRankingConfig },
+    providers: normalizeSmartRankingProviders(
+      undefined,
+      defaultSmartRankingConfig
+    ),
     status: {
       state: "error" as const,
       message: "Open the extension settings to configure smart ranking.",

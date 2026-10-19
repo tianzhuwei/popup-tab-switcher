@@ -1,11 +1,13 @@
 import { ServiceFactory } from "../../service-factory";
 import {
   defaultSmartRankingConfig,
+  defaultSmartRankingProviders,
   getRankingPermissionOrigin,
   ISmartRankingConfig,
   ISmartRankingSettings,
   ISmartRankingStatus,
   normalizeSmartRankingConfig,
+  normalizeSmartRankingProviders,
 } from "../../utils/smart-ranking";
 import { requestTabRanking } from "./model-client";
 import {
@@ -17,6 +19,7 @@ import {
 } from "./policy";
 
 const CONFIG_KEY = "smartRankingConfig";
+const PROVIDERS_KEY = "smartRankingProviders";
 const HISTORY_KEY = "smartRankingHistory";
 const CACHE_KEY = "smartRankingCache";
 const REQUEST_INTERVAL = 10_000;
@@ -34,6 +37,7 @@ interface ICachedRanking {
 }
 
 let config = { ...defaultSmartRankingConfig };
+let providers = normalizeSmartRankingProviders(undefined, config);
 let status: ISmartRankingStatus = {
   state: "off",
   message: "Smart ranking is off.",
@@ -80,8 +84,13 @@ function initialize(): Promise<void> {
       await chrome.storage.local.setAccessLevel({
         accessLevel: "TRUSTED_CONTEXTS",
       });
-      const saved = await chrome.storage.local.get([CONFIG_KEY, HISTORY_KEY]);
+      const saved = await chrome.storage.local.get([
+        CONFIG_KEY,
+        PROVIDERS_KEY,
+        HISTORY_KEY,
+      ]);
       config = normalizeSmartRankingConfig(saved[CONFIG_KEY]);
+      providers = normalizeSmartRankingProviders(saved[PROVIDERS_KEY], config);
       if (Array.isArray(saved[HISTORY_KEY])) {
         for (const entry of saved[HISTORY_KEY].slice(0, MAX_DOMAINS)) {
           if (
@@ -177,15 +186,25 @@ function initialize(): Promise<void> {
 
 export async function getSmartRankingSettings(): Promise<ISmartRankingSettings> {
   await initialize();
-  return { config: { ...config }, status: { ...status } };
+  return {
+    config: { ...config },
+    providers: normalizeSmartRankingProviders(providers, config),
+    status: { ...status },
+  };
 }
 
 export async function saveSmartRankingConfig(
-  value: unknown
+  value: unknown,
+  providerValues?: unknown
 ): Promise<ISmartRankingSettings> {
   await initialize();
   try {
     const next = normalizeSmartRankingConfig(value);
+    const nextProviders = normalizeSmartRankingProviders(
+      providerValues,
+      next,
+      providers
+    );
     if (next.enabled) {
       const origin = getRankingPermissionOrigin(next);
       if (!next.apiKey)
@@ -193,8 +212,12 @@ export async function saveSmartRankingConfig(
       if (!(await chrome.permissions.contains({ origins: [origin] })))
         throw new Error("Grant access to the selected provider before saving.");
     }
-    await chrome.storage.local.set({ [CONFIG_KEY]: next });
+    await chrome.storage.local.set({
+      [CONFIG_KEY]: next,
+      [PROVIDERS_KEY]: nextProviders,
+    });
     config = next;
+    providers = nextProviders;
     revision += 1;
     controller?.abort();
     clearTimeout(timer);
@@ -227,7 +250,10 @@ export async function saveSmartRankingConfig(
 }
 
 export async function resetSmartRanking(): Promise<void> {
-  await saveSmartRankingConfig(defaultSmartRankingConfig);
+  await saveSmartRankingConfig(
+    defaultSmartRankingConfig,
+    defaultSmartRankingProviders
+  );
 }
 
 /** Reading the cache never waits for a model or pushes changes into an open popup. */
