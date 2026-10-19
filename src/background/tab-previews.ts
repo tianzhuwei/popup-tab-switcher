@@ -82,7 +82,7 @@ export function initTabPreviews(): void {
   });
   chrome.windows.onFocusChanged.addListener((windowId) => {
     captureRevision += 1;
-    clearTimeout(captureTimer);
+    if (captureTimer !== undefined) clearTimeout(captureTimer);
     if (windowId !== chrome.windows.WINDOW_ID_NONE) scheduleCapture(windowId);
   });
   chrome.permissions.onRemoved.addListener(() => {
@@ -106,7 +106,7 @@ export async function setTabPreviewsEnabled(value: boolean): Promise<void> {
     enabled = false;
     epoch += 1;
     captureRevision += 1;
-    clearTimeout(captureTimer);
+    if (captureTimer !== undefined) clearTimeout(captureTimer);
     await serialize(async () => {
       for (const ownerTabId of restoredOwners) shownOwners.delete(ownerTabId);
       restoredOwners.clear();
@@ -468,7 +468,7 @@ async function saveAccessState(): Promise<void> {
 function scheduleCapture(windowId?: number): void {
   if (!enabled) return;
   pendingWindowId = windowId;
-  clearTimeout(captureTimer);
+  if (captureTimer !== undefined) clearTimeout(captureTimer);
   captureTimer = setTimeout(() => {
     captureTimer = undefined;
     void captureCurrentTab(pendingWindowId);
@@ -500,7 +500,8 @@ async function captureCurrentTab(windowId?: number): Promise<void> {
     if (shownOwners.has(tab.id!)) return;
     const existing = previews.get(tab.id!);
     if (
-      existing?.url === tab.url &&
+      existing &&
+      existing.url === tab.url &&
       Date.now() - existing.capturedAt < SAME_PAGE_INTERVAL
     )
       return;

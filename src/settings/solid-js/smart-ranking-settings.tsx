@@ -56,7 +56,7 @@ export function SmartRankingSettings(props: IProps) {
   });
   onCleanup(() => {
     disposed = true;
-    clearInterval(statusTimer);
+    if (statusTimer !== undefined) clearInterval(statusTimer);
     chrome.storage.onChanged.removeListener(onStorageChanged);
   });
 

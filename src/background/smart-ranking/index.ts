@@ -252,7 +252,7 @@ export async function saveSmartRankingConfig(
     providers = nextProviders;
     revision += 1;
     controller?.abort();
-    clearTimeout(timer);
+    if (timer !== undefined) clearTimeout(timer);
     cache.clear();
     lastObserved = undefined;
     retryAfter = 0;
@@ -352,7 +352,7 @@ function getCachedPrediction(plan: IRankingPlan): ICachedRanking | undefined {
 }
 
 export function scheduleSmartRanking(): void {
-  clearTimeout(timer);
+  if (timer !== undefined) clearTimeout(timer);
   timer = setTimeout(() => {
     timer = undefined;
     void refreshRanking();
@@ -451,7 +451,7 @@ async function requestPrediction(
       Date.now();
     if (wait > 0) {
       if (!priority) {
-        clearTimeout(timer);
+        if (timer !== undefined) clearTimeout(timer);
         timer = setTimeout(() => {
           timer = undefined;
           void refreshRanking();
@@ -546,7 +546,7 @@ async function runPrediction(
           : "Smart ranking is unavailable. Visit order is preserved.",
     };
   } finally {
-    clearTimeout(timeout);
+    if (timeout !== undefined) clearTimeout(timeout);
   }
 }
 

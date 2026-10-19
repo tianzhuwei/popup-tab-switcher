@@ -83,7 +83,8 @@ export class ServiceFactory {
   /** Layout reads are coalesced; this does not delay commands or initial opening. */
   static scheduleRegistryRefresh(): void {
     ServiceFactory.refreshRevision += 1
-    clearTimeout(ServiceFactory.refreshTimeout)
+    if (ServiceFactory.refreshTimeout !== undefined)
+      clearTimeout(ServiceFactory.refreshTimeout)
     ServiceFactory.refreshTimeout = setTimeout(() => {
       ServiceFactory.refreshTimeout = undefined
       ServiceFactory.refreshRegistry().catch((error) =>

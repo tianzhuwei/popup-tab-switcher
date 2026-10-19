@@ -317,7 +317,12 @@ function dispose() {
   window.removeEventListener("message", onParentMessage);
   window.removeEventListener("pagehide", dispose);
   chrome.storage.onChanged.removeListener(onSettingsChanged);
-  chrome.permissions.onRemoved.removeListener(onPermissionsRemoved);
+  // @types/chrome 0.0.235 omits removeListener, though Chrome provides it.
+  (
+    chrome.permissions.onRemoved as chrome.events.Event<
+      typeof onPermissionsRemoved
+    >
+  ).removeListener(onPermissionsRemoved);
   chrome.tabs.onRemoved.removeListener(onTabRemoved);
   chrome.tabs.onUpdated.removeListener(onTabUpdated);
 }

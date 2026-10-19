@@ -13,7 +13,7 @@
     "lint": "eslint --ext .ts,.js ./",
     "start": "webpack watch --env development",
     "test": "mocha --require ts-node/register --bail ./src/**/*-test.{js,ts}",
-    "test:ts": "tsc --noEmit"
+    "test:ts": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
   "keywords": [
     "extension",

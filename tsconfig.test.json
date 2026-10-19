@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["chrome", "mocha", "node"]
+  },
+  "include": ["src/**/*-test.ts", "src/**/*-test.js", "webpack.d.ts"],
+  "exclude": []
+}

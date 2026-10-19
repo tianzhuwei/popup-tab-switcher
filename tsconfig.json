@@ -9,8 +9,11 @@
     "allowJs": true,
     "esModuleInterop": true,
     "jsx": "preserve",
-    "jsxImportSource": "solid-js"
+    "jsxImportSource": "solid-js",
+    "types": ["chrome", "mocha"]
   },
+  "include": ["src", "webpack.d.ts"],
+  "exclude": ["src/**/*-test.ts", "src/**/*-test.js"],
   "ts-node": {
     "transpileOnly": true
   }
