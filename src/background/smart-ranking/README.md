@@ -13,22 +13,31 @@ transform animation (skipped for reduced motion).
 - `model-client.ts`: System One requests, provider authentication/model names,
   and strict response validation. No SDK or generated-text parsing is needed.
 - `index.ts`: local domain-usage statistics, scheduling, configuration, bounded
-  session cache, and request cancellation. Ordinary background requests are
-  debounced and at least ten seconds apart. An explicit popup miss skips those
-  delays, shares matching in-flight work and takes priority over prefetching.
-  Requests time out after eight seconds; failures back off one minute.
+  session cache, and request cancellation. Visits are recorded on activation,
+  independently of model requests. Background prefetches wait for a 1.5 second
+  dwell, are at least ten seconds apart, and ignore title-only changes (cache
+  signatures use tab IDs and domains, not titles). An explicit popup miss skips
+  those delays and shares matching in-flight work; the popup waits at most two
+  seconds, while the request keeps running to warm the cache. Requests time out
+  after eight seconds. Authentication/configuration errors pause requests until
+  settings change; rate limits back off exponentially (1 to 30 minutes); other
+  failures back off one minute. Prefetches stop after 300 requests per day and
+  all requests after 500.
 - `../../utils/smart-ranking.ts`: configuration types and official endpoint
   validation shared with the settings page.
 
-Ordinary candidates with valid predictions are sorted by descending probability,
-regardless of confidence. Equal probabilities, including zeros, retain their
-most-recently-used order. Pinned tabs, the current tab, and the previously used tab
-keep their original positions. Visible tabs without predictions follow the ranked
-candidates in visit order. Predictions assume the user has opened the tab switcher
+Only candidates with a probability of at least 15% are promoted, sorted by
+descending probability, into the first reorderable slots; equal probabilities
+retain most-recently-used order. Other predicted tabs keep visit order. Pinned
+tabs, the current tab, the previously used tab, and tabs without predictions
+(such as local or private pages) keep their original positions. Domain
+statistics decay with a two-week half-life. When the current page is private,
+ranking still runs with a placeholder current page. Predictions assume the user has opened the tab switcher
 and is ready to select one of the supplied candidate tabs. The displayed
-percentages are raw model probabilities among those candidates; they are not
-measured prediction accuracy or renormalized over the visible rows. Cached
-predictions containing the removed `other` option are discarded on loading.
+percentages are model probabilities among those candidates, renormalized when a
+provider omits zero-probability candidates or rounds values; they are not
+measured prediction accuracy or renormalized over the visible rows. Unknown
+response keys (such as a removed `other` option) are ignored.
 
 Only ordinary non-incognito HTTP(S) pages with public-looking DNS hostnames are
 eligible. Local names, IP addresses and common intranet suffixes are excluded;

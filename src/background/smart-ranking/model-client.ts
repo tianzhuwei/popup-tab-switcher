@@ -1,14 +1,34 @@
 import {
   getRankingPermissionOrigin,
   ISmartRankingConfig,
-  isValidRankingProbabilitySum,
-  RankingProvider,
 } from "../../utils/smart-ranking";
 
 interface IRankingResponse {
   probabilities: Record<string, number>;
   confidence: number;
 }
+
+/**
+ * `auth` and `config` failures cannot recover without a settings change;
+ * `rate` failures need a growing backoff; the rest are treated as transient.
+ */
+export type RankingErrorKind =
+  | "auth"
+  | "config"
+  | "rate"
+  | "network"
+  | "server"
+  | "invalid"
+  | "cancelled";
+
+export class RankingRequestError extends Error {
+  constructor(message: string, readonly kind: RankingErrorKind) {
+    super(message);
+  }
+}
+
+// Responses whose total drifts further than this are considered malformed.
+const MAX_PROBABILITY_DRIFT = 0.2;
 
 const MODELS = {
   bailian: "decision-model-preview",
@@ -21,12 +41,25 @@ export async function requestTabRanking(
   criteria: Record<string, string>,
   signal: AbortSignal
 ): Promise<IRankingResponse> {
-  getRankingPermissionOrigin(config);
+  try {
+    getRankingPermissionOrigin(config);
+  } catch (error) {
+    throw new RankingRequestError(
+      error instanceof Error ? error.message : "Invalid endpoint.",
+      "config"
+    );
+  }
   if (!config.apiKey.trim()) {
-    throw new Error("Enter an API key for smart ranking.");
+    throw new RankingRequestError(
+      "Enter an API key for smart ranking.",
+      "config"
+    );
   }
   if (config.apiKey.length > 4096 || /[\r\n]/.test(config.apiKey)) {
-    throw new Error("Enter a valid API key for smart ranking.");
+    throw new RankingRequestError(
+      "Enter a valid API key for smart ranking.",
+      "config"
+    );
   }
   const hostname = new URL(config.endpoint).hostname;
   // Bailian's shared inference gateway uses a raw key; workspace gateways and Jev use Bearer.
@@ -46,7 +79,10 @@ export async function requestTabRanking(
       ([id, description]) => !id || typeof description !== "string"
     )
   ) {
-    throw new Error("Smart ranking requires valid candidate tabs.");
+    throw new RankingRequestError(
+      "Smart ranking requires valid candidate tabs.",
+      "invalid"
+    );
   }
   const choices = Object.fromEntries(candidates);
   const body = JSON.stringify({
@@ -81,28 +117,44 @@ export async function requestTabRanking(
       cache: "no-store",
     });
   } catch {
-    throw new Error(
-      signal.aborted
-        ? "Smart ranking request was cancelled."
-        : "Could not reach the smart ranking provider. Check the endpoint and network."
-    );
+    throw signal.aborted
+      ? new RankingRequestError(
+          "Smart ranking request was cancelled.",
+          "cancelled"
+        )
+      : new RankingRequestError(
+          "Could not reach the smart ranking provider. Check the endpoint and network.",
+          "network"
+        );
   }
   if (!response.ok) {
     if (response.status === 401) {
-      throw new Error("The API key is invalid or has expired.");
+      throw new RankingRequestError(
+        "The API key is invalid or has expired.",
+        "auth"
+      );
     }
     if (response.status === 403) {
-      throw new Error(
-        "The API key does not have access to this model or endpoint."
+      throw new RankingRequestError(
+        "The API key does not have access to this model or endpoint.",
+        "auth"
+      );
+    }
+    if (response.status === 404) {
+      throw new RankingRequestError(
+        "The smart ranking endpoint or model was not found.",
+        "config"
       );
     }
     if (response.status === 429) {
-      throw new Error(
-        "The provider rate limit or quota was reached. Try again later."
+      throw new RankingRequestError(
+        "The provider rate limit or quota was reached. Try again later.",
+        "rate"
       );
     }
-    throw new Error(
-      `The smart ranking provider returned HTTP ${response.status}.`
+    throw new RankingRequestError(
+      `The smart ranking provider returned HTTP ${response.status}.`,
+      "server"
     );
   }
 
@@ -112,54 +164,60 @@ export async function requestTabRanking(
   } catch {
     throw invalidResponse();
   }
-  return parseRankingResponse(result, Object.keys(choices), config.provider);
+  return parseRankingResponse(result, Object.keys(choices));
 }
 
-function parseRankingResponse(
+/**
+ * Accepts minor deviations (omitted zero-probability candidates, unknown
+ * keys, rounding drift) and renormalizes, so one sloppy field does not
+ * discard an otherwise usable prediction.
+ */
+export function parseRankingResponse(
   result: unknown,
-  candidates: string[],
-  provider: RankingProvider
+  candidates: string[]
 ): IRankingResponse {
-  if (
-    !isRecord(result) ||
-    !isRecord(result.answers) ||
-    Object.keys(result.answers).length !== 1 ||
-    !Object.prototype.hasOwnProperty.call(result.answers, "next_tab")
-  ) {
+  if (!isRecord(result) || !isRecord(result.answers)) {
     throw invalidResponse();
   }
   const answer = result.answers.next_tab;
   if (
     !isRecord(answer) ||
-    answer.type !== "choice" ||
-    typeof answer.choice !== "string" ||
-    !candidates.includes(answer.choice) ||
-    !isProbability(answer.confidence) ||
-    !isRecord(answer.probabilities) ||
-    Object.keys(answer.probabilities).length !== candidates.length
+    (answer.type !== undefined && answer.type !== "choice") ||
+    !isRecord(answer.probabilities)
   ) {
+    throw invalidResponse();
+  }
+  const raw = answer.probabilities;
+  const values: Record<string, number> = {};
+  let sum = 0;
+  let provided = 0;
+  for (const candidate of candidates) {
+    if (!Object.prototype.hasOwnProperty.call(raw, candidate)) {
+      values[candidate] = 0;
+      continue;
+    }
+    const probability = raw[candidate];
+    if (!isProbability(probability)) throw invalidResponse();
+    values[candidate] = probability;
+    sum += probability;
+    provided += 1;
+  }
+  if (provided === 0 || sum <= 0 || Math.abs(sum - 1) > MAX_PROBABILITY_DRIFT) {
     throw invalidResponse();
   }
   const probabilities: Record<string, number> = {};
   for (const candidate of candidates) {
-    const probability = answer.probabilities[candidate];
-    if (
-      !Object.prototype.hasOwnProperty.call(answer.probabilities, candidate) ||
-      !isProbability(probability)
-    ) {
-      throw invalidResponse();
-    }
     Object.defineProperty(probabilities, candidate, {
-      value: probability,
+      value: values[candidate] / sum,
       enumerable: true,
       configurable: true,
       writable: true,
     });
   }
-  if (!isValidRankingProbabilitySum(probabilities, provider)) {
-    throw invalidResponse();
-  }
-  return { probabilities, confidence: answer.confidence };
+  const confidence = isProbability(answer.confidence)
+    ? answer.confidence
+    : Math.max(...Object.values(probabilities));
+  return { probabilities, confidence };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -175,6 +233,9 @@ function isProbability(value: unknown): value is number {
   );
 }
 
-function invalidResponse(): Error {
-  return new Error("The provider returned an invalid smart ranking response.");
+function invalidResponse(): RankingRequestError {
+  return new RankingRequestError(
+    "The provider returned an invalid smart ranking response.",
+    "invalid"
+  );
 }

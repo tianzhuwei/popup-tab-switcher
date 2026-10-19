@@ -11,9 +11,10 @@ import {
   normalizeSmartRankingConfig,
   normalizeSmartRankingProviders,
 } from "../../utils/smart-ranking";
-import { requestTabRanking } from "./model-client";
+import { RankingRequestError, requestTabRanking } from "./model-client";
 import {
   applyRanking,
+  createRankingInput,
   createRankingPlan,
   getPublicTabMetadata,
   IDomainUsage,
@@ -25,8 +26,20 @@ const CONFIG_KEY = "smartRankingConfig";
 const PROVIDERS_KEY = "smartRankingProviders";
 const HISTORY_KEY = "smartRankingHistory";
 const CACHE_KEY = "smartRankingCache";
+const USAGE_COUNTER_KEY = "smartRankingDailyUsage";
 const REQUEST_INTERVAL = 10_000;
-const CACHE_DURATION = 5 * 60_000;
+const CACHE_DURATION = 10 * 60_000;
+// Background prefetching waits for the user to settle on a page.
+const PREFETCH_DWELL = 1500;
+// An opening popup waits this long before showing visit order; the request
+// keeps running and caches its result for the next opening.
+const POPUP_WAIT = 2000;
+const REQUEST_TIMEOUT = 8000;
+const RETRY_DELAY = 60_000;
+const MAX_RATE_LIMIT_DELAY = 30 * 60_000;
+// Prefetches stop at this daily count, leaving room for explicit popup misses.
+const DAILY_PREFETCH_LIMIT = 300;
+const DAILY_REQUEST_LIMIT = 500;
 const MAX_CACHE_ENTRIES = 8;
 const MAX_DOMAINS = 100;
 
@@ -68,6 +81,10 @@ let refreshing = false;
 let revision = 0;
 let lastRequest = 0;
 let retryAfter = 0;
+let rateLimitDelay = RETRY_DELAY;
+// Auth/config failures pause requests until the configuration changes.
+let pausedRevision: number | undefined;
+let dailyUsage = { day: "", count: 0 };
 let lastObserved: { id: number; domain: string } | undefined;
 let saveQueue = Promise.resolve();
 const usage = new Map<string, IDomainUsage>();
@@ -75,15 +92,20 @@ const cache = new Map<string, ICachedRanking>();
 
 export function initSmartRanking(): void {
   void initialize();
-  chrome.tabs.onActivated.addListener(() => scheduleSmartRanking());
-  chrome.windows.onFocusChanged.addListener(() => scheduleSmartRanking());
-  chrome.tabs.onUpdated.addListener((_id, change) => {
-    if (
-      change.title !== undefined ||
-      change.url ||
-      change.status === "complete"
-    )
+  chrome.tabs.onActivated.addListener(({ tabId }) => {
+    void observeTab(tabId);
+    scheduleSmartRanking();
+  });
+  chrome.windows.onFocusChanged.addListener(() => {
+    void observeActiveTab();
+    scheduleSmartRanking();
+  });
+  // Title-only changes do not affect cached plans, so they are ignored.
+  chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
+    if (change.url || change.status === "complete") {
+      if (tab.active) void observeTab(tabId);
       scheduleSmartRanking();
+    }
   });
   chrome.tabs.onRemoved.addListener(() => scheduleSmartRanking());
   chrome.permissions.onRemoved.addListener(() => {
@@ -107,7 +129,15 @@ function initialize(): Promise<void> {
         CONFIG_KEY,
         PROVIDERS_KEY,
         HISTORY_KEY,
+        USAGE_COUNTER_KEY,
       ]);
+      const counter = saved[USAGE_COUNTER_KEY];
+      if (
+        typeof counter?.day === "string" &&
+        Number.isInteger(counter.count) &&
+        counter.count >= 0
+      )
+        dailyUsage = { day: counter.day, count: counter.count };
       // Replace only the former default, preserving credentials and custom endpoints.
       const legacyEndpoint =
         "https://dashscope.aliyuncs.com/compatible-mode/v1/systemone";
@@ -256,6 +286,8 @@ export async function saveSmartRankingConfig(
     cache.clear();
     lastObserved = undefined;
     retryAfter = 0;
+    rateLimitDelay = RETRY_DELAY;
+    pausedRevision = undefined;
     lastRequest = 0;
     persistCache();
     if (!next.enabled) {
@@ -316,7 +348,14 @@ export async function requestSmartRankingSnapshot(
   const requestedRevision = revision;
   const plan = createRankingPlan(input, usage);
   if (!plan) return;
-  const prediction = await requestPrediction(plan, true, requestedRevision);
+  let waitTimer: ReturnType<typeof setTimeout> | undefined;
+  const prediction = await Promise.race([
+    requestPrediction(plan, true, requestedRevision),
+    new Promise<undefined>((resolve) => {
+      waitTimer = setTimeout(resolve, POPUP_WAIT);
+    }),
+  ]);
+  if (waitTimer !== undefined) clearTimeout(waitTimer);
   if (!prediction || requestedRevision !== revision || !config.enabled) return;
   return createSnapshot(input, prediction);
 }
@@ -356,7 +395,7 @@ export function scheduleSmartRanking(): void {
   timer = setTimeout(() => {
     timer = undefined;
     void refreshRanking();
-  }, 700);
+  }, PREFETCH_DWELL);
 }
 
 async function refreshRanking(): Promise<void> {
@@ -386,22 +425,14 @@ async function refreshRanking(): Promise<void> {
     ]);
     if (requestedRevision !== revision) return;
     const active = activeTabs[0];
-    const page = active && getPublicTabMetadata(active);
-    if (!active || active.id === undefined || !page) return;
-    recordVisit(active.id, page.domain);
-    const isInScope = (tab: chrome.tabs.Tab) =>
-      settings.isShowingTabsFromAllWindows || tab.windowId === active.windowId;
-    const recentTabs = registry.getTabs().filter(isInScope).reverse();
-    const input: IRankingInput = {
-      recentTabs,
-      visibleTabs: registry.getTabsToShow(isInScope),
-      pinnedTabIds: registry.getPinnedTabIds(),
-      activeTabId: active.id,
-      previousTabId: recentTabs.find((tab) => tab.id !== active.id)?.id,
-      scope: settings.isShowingTabsFromAllWindows
-        ? "all"
-        : String(active.windowId),
-    };
+    if (!active || active.id === undefined) return;
+    const input = createRankingInput(
+      registry,
+      settings.isShowingTabsFromAllWindows,
+      active.windowId
+    );
+    // The registry normally catches up within the dwell; skip a stale view.
+    if (input.activeTabId !== active.id) return;
     const plan = createRankingPlan(input, usage);
     if (!plan) return;
     await requestPrediction(plan, false, requestedRevision);
@@ -445,6 +476,18 @@ async function requestPrediction(
       // Wait for cancellation/settlement before sending another model request.
       await current.promise;
       continue;
+    }
+    if (pausedRevision === requestedRevision) return;
+    resetDailyUsageIfNeeded();
+    if (
+      dailyUsage.count >=
+      (priority ? DAILY_REQUEST_LIMIT : DAILY_PREFETCH_LIMIT)
+    ) {
+      status = {
+        state: "waiting",
+        message: `Daily request limit reached (${dailyUsage.count} today). Visit order is used until tomorrow.`,
+      };
+      return;
     }
     const wait =
       Math.max(priority ? 0 : lastRequest + REQUEST_INTERVAL, retryAfter) -
@@ -503,8 +546,9 @@ async function runPrediction(
       };
       return;
     }
-    timeout = setTimeout(() => request.controller.abort(), 8000);
+    timeout = setTimeout(() => request.controller.abort(), REQUEST_TIMEOUT);
     lastRequest = Date.now();
+    countRequest();
     status = {
       state: "waiting",
       message: "Preparing predictions…",
@@ -529,24 +573,90 @@ async function runPrediction(
     while (cache.size > MAX_CACHE_ENTRIES)
       cache.delete(cache.keys().next().value!);
     persistCache();
+    rateLimitDelay = RETRY_DELAY;
     status = {
       state: "ready",
-      message: "Prediction ready.",
+      message: `Prediction ready. ${dailyUsage.count} requests today.`,
       updatedAt: Date.now(),
     };
     return prediction;
   } catch (error) {
     if (request.revision !== revision || request.preempted) return;
-    retryAfter = Date.now() + 60_000;
-    status = {
-      state: "error",
-      message:
-        error instanceof Error
-          ? error.message
-          : "Smart ranking is unavailable. Visit order is preserved.",
-    };
+    handleRequestError(error, request.revision);
   } finally {
     if (timeout !== undefined) clearTimeout(timeout);
+  }
+}
+
+function handleRequestError(error: unknown, requestRevision: number): void {
+  const kind = error instanceof RankingRequestError ? error.kind : "server";
+  const message =
+    error instanceof Error
+      ? error.message
+      : "Smart ranking is unavailable. Visit order is preserved.";
+  if (kind === "auth" || kind === "config") {
+    // Retrying cannot succeed; wait for the user to update the settings.
+    pausedRevision = requestRevision;
+    status = {
+      state: "error",
+      message: `${message} Requests are paused until settings change.`,
+    };
+    return;
+  }
+  if (kind === "rate") {
+    retryAfter = Date.now() + rateLimitDelay;
+    rateLimitDelay = Math.min(rateLimitDelay * 2, MAX_RATE_LIMIT_DELAY);
+  } else {
+    // Timeouts surface as cancellation and back off like network failures.
+    retryAfter = Date.now() + RETRY_DELAY;
+  }
+  status = { state: "error", message };
+}
+
+function getDay(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+}
+
+function resetDailyUsageIfNeeded(): void {
+  const day = getDay();
+  if (dailyUsage.day !== day) dailyUsage = { day, count: 0 };
+}
+
+function countRequest(): void {
+  resetDailyUsageIfNeeded();
+  dailyUsage.count += 1;
+  const snapshot = { ...dailyUsage };
+  saveQueue = saveQueue
+    .then(() => chrome.storage.local.set({ [USAGE_COUNTER_KEY]: snapshot }))
+    .catch(() => {});
+}
+
+/** Records visits as they happen, independent of model scheduling. */
+async function observeTab(tabId: number): Promise<void> {
+  await initialize();
+  if (!config.enabled) return;
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (!tab.active) return;
+    const window = await chrome.windows.get(tab.windowId);
+    if (!window.focused) return;
+    const page = getPublicTabMetadata(tab);
+    if (page) recordVisit(tabId, page.domain);
+  } catch {
+    // The tab or window may have closed meanwhile.
+  }
+}
+
+async function observeActiveTab(): Promise<void> {
+  try {
+    const [active] = await chrome.tabs.query({
+      active: true,
+      lastFocusedWindow: true,
+    });
+    if (active?.id !== undefined) await observeTab(active.id);
+  } catch {
+    // Ignore transient window state.
   }
 }
 

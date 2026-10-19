@@ -32,12 +32,15 @@ import {
   saveSmartRankingConfig,
   scheduleSmartRanking,
 } from "./background/smart-ranking";
-import { testSmartRankingConfig } from "./background/smart-ranking/connection-test";
+import { testSmartRankingConfig } from "./background/smart-ranking/connection-check";
 import {
   defaultSmartRankingConfig,
   normalizeSmartRankingProviders,
 } from "./utils/smart-ranking";
-import { IRankingInput } from "./background/smart-ranking/policy";
+import {
+  createRankingInput,
+  IRankingInput,
+} from "./background/smart-ranking/policy";
 import { ISettings } from "./utils/settings";
 import TabRegistry from "./utils/tab-registry";
 
@@ -538,17 +541,11 @@ function getPopupRankingInput(
   settings: ISettings,
   windowId?: number
 ): IRankingInput {
-  const isInScope = (tab: ITab) =>
-    settings.isShowingTabsFromAllWindows || tab.windowId === windowId;
-  const recentTabs = registry.getTabs().filter(isInScope).reverse();
-  return {
-    recentTabs,
-    visibleTabs: registry.getTabsToShow(isInScope),
-    pinnedTabIds: registry.getPinnedTabIds(),
-    activeTabId: recentTabs[0]?.id,
-    previousTabId: recentTabs[1]?.id,
-    scope: settings.isShowingTabsFromAllWindows ? "all" : String(windowId),
-  };
+  return createRankingInput(
+    registry,
+    settings.isShowingTabsFromAllWindows,
+    windowId
+  );
 }
 
 function getRankingFingerprint(input: IRankingInput): string {
@@ -558,7 +555,8 @@ function getRankingFingerprint(input: IRankingInput): string {
     input.previousTabId,
     input.pinnedTabIds,
     input.visibleTabs.map((tab) => tab.id),
-    input.recentTabs.map((tab) => [tab.id, tab.url, tab.title, tab.incognito]),
+    // Titles are excluded: counters/timers change them without affecting order.
+    input.recentTabs.map((tab) => [tab.id, tab.url, tab.incognito]),
   ]);
 }
 

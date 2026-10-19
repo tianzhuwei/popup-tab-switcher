@@ -121,10 +121,11 @@ export function SmartRankingSettings(props: IProps) {
         />
       </div>
       <p class={rankingStyles.note}>
-        When enabled, tab titles, domains and usage statistics are sent to the
-        selected provider. Screenshots and full URLs are not sent. The API Key
-        is stored locally. Changes apply after Save. Test sends a small sample
-        request without saving or enabling smart ranking.
+        When enabled, public tab titles, domains, local time and usage
+        statistics are sent to the selected provider. Screenshots and full URLs
+        are not sent. The API Key is stored locally. Changes apply after Save.
+        Test sends a small sample request without saving or enabling smart
+        ranking.
       </p>
       <div class={rankingStyles.actions}>
         <span class={rankingStyles.status} role="status" aria-live="polite">
