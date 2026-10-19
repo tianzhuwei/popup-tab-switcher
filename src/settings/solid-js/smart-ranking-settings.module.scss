@@ -1,0 +1,85 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 16px;
+  color: var(--settings-text-primary);
+  font-size: 12px;
+
+  label {
+    font-weight: 500;
+  }
+
+  input,
+  select {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--settings-border-color);
+    border-radius: 8px;
+    padding: 8px 10px;
+    background: var(--settings-card-background);
+    color: var(--settings-text-primary);
+    font: inherit;
+
+    &:focus-visible {
+      outline: 2px solid var(--settings-accent-color);
+      outline-offset: 1px;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+    }
+  }
+}
+
+.note,
+.error {
+  margin: 8px 16px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--settings-text-secondary);
+}
+
+.error {
+  color: var(--settings-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px 12px;
+}
+
+.status {
+  flex: 1;
+  min-width: 0;
+  color: var(--settings-text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.save {
+  border: 1px solid var(--settings-border-color);
+  border-radius: 8px;
+  padding: 8px 16px;
+  background: var(--settings-row-hover);
+  color: var(--settings-accent-color);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--settings-accent-color);
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+}

@@ -1,4 +1,5 @@
 import { createEffect, createMemo, onCleanup } from "solid-js";
+import { Show } from "solid-js/web";
 import { TabIcon, PinIcon, CloseIcon } from "./icons";
 
 interface IProps {
@@ -6,6 +7,7 @@ interface IProps {
   isActive: boolean;
   isReducedMotion: boolean;
   isPinned: boolean;
+  probability?: number;
   tab: chrome.tabs.Tab;
   onClick: () => void;
   onHover: () => void;
@@ -22,6 +24,21 @@ export function PopupTab(props: IProps) {
   const domain = createMemo(() =>
     getTabDomain(props.tab.url || props.tab.pendingUrl)
   );
+  const probabilityLabel = createMemo(() => {
+    const probability = props.probability;
+    if (
+      typeof probability !== "number" ||
+      !Number.isFinite(probability) ||
+      probability < 0 ||
+      probability > 1
+    ) {
+      return "";
+    }
+    if (probability > 0 && probability < 0.001) {
+      return "<0.1%";
+    }
+    return `${Number((probability * 100).toFixed(1))}%`;
+  });
 
   createEffect(() => {
     const isSelected = props.isSelected;
@@ -78,7 +95,15 @@ export function PopupTab(props: IProps) {
           </span>
         </div>
         <div class="tab__domain" title={domain()}>
-          {domain()}
+          <span class="tab__domainText">{domain()}</span>
+          <Show when={probabilityLabel()}>
+            <span
+              class="tab__probability"
+              title="Model prediction among candidate tabs; not measured accuracy"
+            >
+              {probabilityLabel()}
+            </span>
+          </Show>
         </div>
       </div>
       <button

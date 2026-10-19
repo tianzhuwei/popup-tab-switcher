@@ -1,11 +1,17 @@
 {
   "manifest_version": 3,
-  "version": "20261019.4",
+  "version": "20261019.5",
   "name": "Popup Tab Switcher",
   "description": "Makes switching between tabs more convenient.",
   "permissions": ["activeTab", "contextMenus", "favicon", "scripting", "storage", "tabs"],
   "host_permissions": ["file:///*"],
-  "optional_host_permissions": ["<all_urls>"],
+  "optional_host_permissions": [
+    "<all_urls>",
+    "https://api.typesafe.ai/*",
+    "https://dashscope.aliyuncs.com/*",
+    "https://dashscope-intl.aliyuncs.com/*",
+    "https://*.maas.aliyuncs.com/*"
+  ],
   "web_accessible_resources": [
     {
       "resources": ["/_favicon/*"],

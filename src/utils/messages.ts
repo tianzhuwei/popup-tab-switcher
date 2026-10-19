@@ -1,5 +1,6 @@
 import { ISettings } from "./settings";
 import { log } from "./logger";
+import { ISmartRankingConfig, ISmartRankingSettings } from "./smart-ranking";
 
 type MessageSender = chrome.runtime.MessageSender;
 type ChromeTab = chrome.tabs.Tab;
@@ -20,6 +21,8 @@ export enum Message {
   OpenTabPreview = "OpenTabPreview",
   GetTabPreview = "GetTabPreview",
   CloseTabPreview = "CloseTabPreview",
+  GetSmartRankingSettings = "GetSmartRankingSettings",
+  SetSmartRankingConfig = "SetSmartRankingConfig",
 }
 
 export function demoSettings() {
@@ -85,6 +88,14 @@ export function closeTabPreview() {
   return { type: Message.CloseTabPreview } as const;
 }
 
+export function getSmartRankingSettings() {
+  return { type: Message.GetSmartRankingSettings } as const;
+}
+
+export function setSmartRankingConfig(config: ISmartRankingConfig) {
+  return { type: Message.SetSmartRankingConfig, config } as const;
+}
+
 interface IMessageTypeToObjectMap {
   [Message.CLOSE_POPUP]: ReturnType<typeof closePopup>;
   [Message.ContentScriptStarted]: ReturnType<typeof contentScriptStarted>;
@@ -101,6 +112,8 @@ interface IMessageTypeToObjectMap {
   [Message.OpenTabPreview]: ReturnType<typeof openTabPreview>;
   [Message.GetTabPreview]: ReturnType<typeof getTabPreview>;
   [Message.CloseTabPreview]: ReturnType<typeof closeTabPreview>;
+  [Message.GetSmartRankingSettings]: ReturnType<typeof getSmartRankingSettings>;
+  [Message.SetSmartRankingConfig]: ReturnType<typeof setSmartRankingConfig>;
 }
 
 type IMessage = IMessageTypeToObjectMap[keyof IMessageTypeToObjectMap];
@@ -112,6 +125,7 @@ interface IGetModelResponse {
   pinnedTabIds: number[];
   activeTabId: number | undefined;
   previousTabId: number | undefined;
+  tabProbabilities: Record<string, number>;
 }
 
 type IMessageResponse<Message extends IMessage> = Message extends ReturnType<
@@ -120,6 +134,10 @@ type IMessageResponse<Message extends IMessage> = Message extends ReturnType<
   ? IGetModelResponse
   : Message extends ReturnType<typeof getSettings>
   ? ISettings
+  : Message extends
+      | ReturnType<typeof getSmartRankingSettings>
+      | ReturnType<typeof setSmartRankingConfig>
+  ? ISmartRankingSettings
   : Message extends ReturnType<typeof openTabPreview>
   ? string | undefined
   : Message extends ReturnType<typeof getTabPreview>
@@ -182,7 +200,11 @@ export function handleMessage(handlers: Partial<IHandlers>) {
       );
       return;
     }
-    if (message.type !== Message.GetTabPreview) {
+    if (
+      message.type !== Message.GetTabPreview &&
+      message.type !== Message.GetSmartRankingSettings &&
+      message.type !== Message.SetSmartRankingConfig
+    ) {
       log(`[Message received]`, message);
     }
     // @ts-expect-error

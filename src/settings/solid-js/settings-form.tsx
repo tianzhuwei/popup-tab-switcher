@@ -11,6 +11,7 @@ import {
   ThemeMode,
 } from "../../utils/settings";
 import { MNumberInput } from "./components/m-text-field/m-number-input";
+import { SmartRankingSettings } from "./smart-ranking-settings";
 
 interface IProps {
   store: ISettingsStoreObject;
@@ -206,6 +207,10 @@ export function SettingsForm(props: IProps) {
             }}
           />
         </Row>
+      </Section>
+
+      <Section icon="auto_awesome" title="Smart ranking">
+        <SmartRankingSettings />
       </Section>
 
       {/* Appearance (layout in px) */}

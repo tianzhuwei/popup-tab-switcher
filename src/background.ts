@@ -21,11 +21,21 @@ import {
   readTabPreview,
   setTabPreviewsEnabled,
 } from "./background/tab-previews";
+import {
+  getSmartRankingSettings,
+  getSmartRankingSnapshot,
+  initSmartRanking,
+  resetSmartRanking,
+  saveSmartRankingConfig,
+  scheduleSmartRanking,
+} from "./background/smart-ranking";
+import { defaultSmartRankingConfig } from "./utils/smart-ranking";
 
 type ChromeTab = chrome.tabs.Tab;
 type IPort = chrome.runtime.Port;
 const suppressAutoSwitchTabIds = new Set<number>();
 const CLOSE_TAB_MENU_ID = "close-current-tab";
+const popupSnapshots = new Map<number, { tabIds?: number[] }>();
 
 // Tracks the requested tab while asynchronous activation events arrive.
 let tabIdToBeActivated: undefined | number;
@@ -43,6 +53,7 @@ if (DEVELOPMENT) {
 }
 
 initTabPreviews();
+initSmartRanking();
 initListeners();
 
 function initListeners() {
@@ -258,6 +269,7 @@ async function handleTabUpdate(
 }
 
 async function handleTabRemove(tabId: number) {
+  popupSnapshots.delete(tabId);
   ServiceFactory.scheduleRegistryRefresh();
   const registry = await ServiceFactory.getTabRegistry();
   log(`[handleTabRemove start]`, tabId);
@@ -293,6 +305,7 @@ function messageHandlers(): Partial<IHandlers> {
     [Message.ContentScriptStopped]: async (_m, sender) => {
       log(`[ContentScriptStopped]`, sender.tab);
       if (sender.tab?.id !== undefined) notifyPreviewPopupHidden(sender.tab.id);
+      if (sender.tab?.id !== undefined) popupSnapshots.delete(sender.tab.id);
       const registry = await ServiceFactory.getTabRegistry();
       registry.removeFromInitialized(sender.tab!.id!);
     },
@@ -325,6 +338,11 @@ function messageHandlers(): Partial<IHandlers> {
       }
     },
     [Message.GET_MODEL]: async (_m, sender) => {
+      const ownerId = sender.frameId === 0 ? sender.tab?.id : undefined;
+      const snapshot: { tabIds?: number[] } | undefined =
+        ownerId === undefined ? undefined : popupSnapshots.get(ownerId) || {};
+      if (ownerId !== undefined && snapshot)
+        popupSnapshots.set(ownerId, snapshot);
       const settings = await ServiceFactory.getSettings();
       const registry = await ServiceFactory.getTabRegistry();
       const senderWindowId = sender.tab?.windowId;
@@ -333,9 +351,27 @@ function messageHandlers(): Partial<IHandlers> {
       const recentTabs = registry.getTabs().filter(isInScope);
       const activeTab = recentTabs[recentTabs.length - 1];
       const previousTab = recentTabs[recentTabs.length - 2];
-      const tabs = registry.getTabsToShow(isInScope);
+      const ranked = await getSmartRankingSnapshot({
+        recentTabs: recentTabs.slice().reverse(),
+        visibleTabs: registry.getTabsToShow(isInScope),
+        pinnedTabIds: registry.getPinnedTabIds(),
+        activeTabId: activeTab?.id,
+        previousTabId: previousTab?.id,
+        scope: settings.isShowingTabsFromAllWindows
+          ? "all"
+          : String(senderWindowId),
+      });
+      if (
+        ownerId !== undefined &&
+        snapshot &&
+        popupSnapshots.get(ownerId) === snapshot &&
+        !snapshot.tabIds
+      ) {
+        snapshot.tabIds = ranked.tabs.map((tab) => tab.id);
+      }
       return {
-        tabs: tabs as chrome.tabs.Tab[],
+        tabs: ranked.tabs as chrome.tabs.Tab[],
+        tabProbabilities: ranked.tabProbabilities,
         settings,
         zoomFactor:
           sender.tab?.id !== undefined
@@ -364,14 +400,25 @@ function messageHandlers(): Partial<IHandlers> {
       const settings = await ServiceFactory.getSettings();
       if (!settings.isTabPreviewEnabled) return;
       const registry = await ServiceFactory.getTabRegistry();
-      const tabs = registry.getTabsToShow(
-        (tab) =>
-          settings.isShowingTabsFromAllWindows ||
-          tab.windowId === owner.windowId
-      );
+      const scopedTabs = registry
+        .getTabs()
+        .filter(
+          (tab) =>
+            settings.isShowingTabsFromAllWindows ||
+            tab.windowId === owner.windowId
+        );
       return openTabPreviewSession(
         owner.id,
-        tabs.map((tab) => tab.id)
+        (
+          popupSnapshots.get(owner.id)?.tabIds ||
+          registry
+            .getTabsToShow(
+              (tab) =>
+                settings.isShowingTabsFromAllWindows ||
+                tab.windowId === owner.windowId
+            )
+            .map((tab) => tab.id)
+        ).filter((id) => scopedTabs.some((tab) => tab.id === id))
       );
     },
     [Message.GetTabPreview]: async ({ token, tabId }, sender) => {
@@ -388,6 +435,7 @@ function messageHandlers(): Partial<IHandlers> {
     [Message.CloseTabPreview]: (_m, sender) => {
       if (sender.frameId === 0 && sender.tab?.id !== undefined) {
         notifyPreviewPopupHidden(sender.tab.id);
+        popupSnapshots.delete(sender.tab.id);
       }
     },
     [Message.SetSettings]: async ({ settings }) => {
@@ -397,6 +445,7 @@ function messageHandlers(): Partial<IHandlers> {
         await currentSettings.update(settings);
       } else {
         await currentSettings.reset();
+        await resetSmartRanking();
       }
       if (
         currentSettings.isTabPreviewEnabled &&
@@ -405,11 +454,40 @@ function messageHandlers(): Partial<IHandlers> {
         await currentSettings.update({ isTabPreviewEnabled: false });
       }
       await setTabPreviewsEnabled(currentSettings.isTabPreviewEnabled);
+      scheduleSmartRanking();
     },
     [Message.GetSettings]: async () => {
       log(`[Settings requested]`);
       const currentSettings = await ServiceFactory.getSettings();
       return currentSettings.getSettingsObject();
+    },
+    [Message.GetSmartRankingSettings]: async (_m, sender) => {
+      if (!isRankingSettingsSender(sender)) return deniedRankingSettings();
+      return getSmartRankingSettings();
+    },
+    [Message.SetSmartRankingConfig]: async ({ config }, sender) => {
+      if (!isRankingSettingsSender(sender)) return deniedRankingSettings();
+      return saveSmartRankingConfig(config);
+    },
+  };
+}
+
+function isRankingSettingsSender(
+  sender: chrome.runtime.MessageSender
+): boolean {
+  return (
+    sender.id === chrome.runtime.id &&
+    sender.url === chrome.runtime.getURL("settings/index.html") &&
+    (sender.frameId === undefined || sender.frameId === 0)
+  );
+}
+
+function deniedRankingSettings() {
+  return {
+    config: { ...defaultSmartRankingConfig },
+    status: {
+      state: "error" as const,
+      message: "Open the extension settings to configure smart ranking.",
     },
   };
 }

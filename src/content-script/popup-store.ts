@@ -15,6 +15,7 @@ interface IStore {
   zoomFactor: number;
   selectedTabIndex: number;
   pinnedTabIds: Set<number>;
+  tabProbabilities: Record<string, number>;
 }
 
 export function createPopupStore() {
@@ -25,6 +26,7 @@ export function createPopupStore() {
     zoomFactor: 1,
     selectedTabIndex: 0,
     pinnedTabIds: new Set(),
+    tabProbabilities: {},
   });
 
   const closePopup = () => {
@@ -47,9 +49,11 @@ export function createPopupStore() {
       pinnedTabIds: new Set(model.pinnedTabIds),
     });
     setStore("settings", reconcile(model.settings));
-    setStore("tabs", reconcile(model.tabs));
 
     if (!store.isOpen) {
+      // Keep this opening's order and probabilities stable across shortcut repeats.
+      setStore("tabProbabilities", reconcile(model.tabProbabilities || {}));
+      setStore("tabs", reconcile(model.tabs));
       let targetIndex = 0;
       if (model.activeTabId !== undefined) {
         const foundIndex = model.tabs.findIndex(

@@ -194,6 +194,7 @@ function Popup({ element }: IProps) {
                     isActive={store.isOpen}
                     isReducedMotion={isReducedMotion()}
                     isPinned={isPinned(tab.id!)}
+                    probability={store.tabProbabilities[String(tab.id)]}
                     onTogglePin={() => {
                       suppressAutoClose();
                       snapshotTabPositions();

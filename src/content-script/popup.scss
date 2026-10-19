@@ -230,7 +230,8 @@
 }
 
 .tab__domain {
-  display: block;
+  display: flex;
+  gap: calc(var(--popup-unit) * 8);
   margin-top: calc(var(--popup-unit) * 2);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -238,6 +239,18 @@
   color: var(--tab-secondary-color);
   font-size: 0.7em;
   line-height: 1.25;
+}
+
+.tab__domainText {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab__probability {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .tab_selected {
