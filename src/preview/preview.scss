@@ -100,22 +100,3 @@ body {
   height: 100%;
   object-fit: contain;
 }
-
-.preview__empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  gap: calc(var(--preview-unit) * 10);
-  color: var(--preview-muted);
-  font-size: calc(var(--preview-unit) * 12);
-  line-height: calc(var(--preview-unit) * 18);
-}
-
-.preview__emptyIcon {
-  width: calc(var(--preview-unit) * 36);
-  height: calc(var(--preview-unit) * 36);
-  opacity: 0.6;
-}

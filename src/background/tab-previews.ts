@@ -2,6 +2,7 @@ import { log } from "../utils/logger";
 
 const CACHE_KEY = "tabPreviewCache";
 const SESSIONS_KEY = "tabPreviewSessions";
+const USAGE_KEY = "tabPreviewUsage";
 const MAX_PREVIEWS = 30;
 const MAX_CACHE_BYTES = 10_000_000;
 // Leave space for the registry and other session state below Chrome's 10 MiB quota.
@@ -34,6 +35,7 @@ interface IPreviewSession {
 
 let initialized = false;
 let enabled = false;
+let requestedEnabled = false;
 let available = false;
 let epoch = 0;
 let settingsRevision = 0;
@@ -60,7 +62,8 @@ export function initTabPreviews(): void {
     scheduleCapture(windowId);
   });
   chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
-    if (change.url || change.status === "loading" || change.discarded) {
+    // Memory Saver discards the document, not the open tab or its last snapshot.
+    if (change.url || change.status === "loading") {
       invalidateTab(tabId);
     }
     if (tab.active && (change.url || change.status === "complete")) {
@@ -97,6 +100,7 @@ export function initTabPreviews(): void {
 }
 
 export async function setTabPreviewsEnabled(value: boolean): Promise<void> {
+  requestedEnabled = value;
   const revision = ++settingsRevision;
   if (!value) {
     enabled = false;
@@ -109,7 +113,11 @@ export async function setTabPreviewsEnabled(value: boolean): Promise<void> {
       previews.clear();
       sessions.clear();
       if (available) {
-        await chrome.storage.session.remove([CACHE_KEY, SESSIONS_KEY]);
+        await chrome.storage.session.remove([
+          CACHE_KEY,
+          SESSIONS_KEY,
+          USAGE_KEY,
+        ]);
       }
     });
     return;
@@ -178,7 +186,7 @@ export function openTabPreviewSession(
     const revision = captureRevision;
     const owner = await getTab(ownerTabId);
     if (
-      !isPreviewable(owner) ||
+      !isLivePreviewable(owner) ||
       !shownOwners.has(ownerTabId) ||
       !isCurrentCapture(revision, currentEpoch)
     )
@@ -228,7 +236,7 @@ export function readTabPreview(
     const preview = previews.get(tabId);
     if (
       !isCurrentCapture(revision, currentEpoch) ||
-      !isPreviewable(owner) ||
+      !isLivePreviewable(owner) ||
       owner.url !== session.ownerUrl ||
       !isPreviewable(tab) ||
       !preview ||
@@ -239,6 +247,13 @@ export function readTabPreview(
       return;
     preview.lastUsed = Date.now();
     session.expiresAt = Date.now() + SESSION_DURATION;
+    // Persist access metadata and token renewal without rewriting screenshots.
+    try {
+      await saveAccessState();
+    } catch (error) {
+      log("[Tab preview access persistence unavailable]", String(error));
+    }
+    if (!isCurrentCapture(revision, currentEpoch)) return;
     // Never expose the cache's URL, owner, or other tabs to the embedding page.
     return {
       dataUrl: preview.dataUrl,
@@ -261,17 +276,25 @@ async function loadState(): Promise<void> {
   try {
     const revision = settingsRevision;
     const [stored, live, local, granted] = await Promise.all([
-      chrome.storage.session.get([CACHE_KEY, SESSIONS_KEY]),
+      chrome.storage.session.get([CACHE_KEY, SESSIONS_KEY, USAGE_KEY]),
       chrome.tabs.query({}),
       chrome.storage.local.get("settings"),
       hasPermission(),
     ]);
-    if (revision === settingsRevision) {
-      enabled = local.settings?.isTabPreviewEnabled === true && granted;
+    let loadRevision = revision;
+    let loadDesired = local.settings?.isTabPreviewEnabled === true;
+    let loadGranted = granted;
+    // A pending enable must not be mistaken for an explicit disable at startup.
+    // Recheck permissions too: the initial snapshot may predate a new grant.
+    while (loadRevision !== settingsRevision) {
+      loadRevision = settingsRevision;
+      loadDesired = requestedEnabled;
+      loadGranted = loadDesired && (await hasPermission());
     }
+    enabled = loadDesired && loadGranted;
     available = true;
     if (!enabled) {
-      await chrome.storage.session.remove([CACHE_KEY, SESSIONS_KEY]);
+      await chrome.storage.session.remove([CACHE_KEY, SESSIONS_KEY, USAGE_KEY]);
       return;
     }
     const openTabs = new Map(live.map((tab) => [tab.id, tab]));
@@ -286,15 +309,19 @@ async function loadState(): Promise<void> {
         Number.isFinite(entry.lastUsed) &&
         entry.width > 0 &&
         entry.height > 0
-      )
+      ) {
+        const lastUsed = stored[USAGE_KEY]?.[entry.tabId];
+        if (Number.isFinite(lastUsed))
+          entry.lastUsed = Math.max(entry.lastUsed, lastUsed);
         previews.set(entry.tabId, entry);
+      }
     }
     for (const session of (stored[SESSIONS_KEY] || []) as IPreviewSession[]) {
       if (
         typeof session.token === "string" &&
         Array.isArray(session.tabIds) &&
         session.expiresAt > Date.now() &&
-        isPreviewable(openTabs.get(session.ownerTabId)) &&
+        isLivePreviewable(openTabs.get(session.ownerTabId)) &&
         openTabs.get(session.ownerTabId)?.url === session.ownerUrl
       ) {
         sessions.set(session.token, session);
@@ -394,7 +421,25 @@ async function saveCache(): Promise<void> {
       bytes += entryBytes;
     }
   }
-  await chrome.storage.session.set({ [CACHE_KEY]: [...previews.values()] });
+  await chrome.storage.session.set({
+    [CACHE_KEY]: [...previews.values()],
+    [USAGE_KEY]: getUsage(),
+  });
+}
+
+function getUsage(): Record<string, number> {
+  return Object.fromEntries(
+    [...previews.values()].map((entry) => [entry.tabId, entry.lastUsed])
+  );
+}
+
+async function saveAccessState(): Promise<void> {
+  if (available) {
+    await chrome.storage.session.set({
+      [USAGE_KEY]: getUsage(),
+      [SESSIONS_KEY]: [...sessions.values()],
+    });
+  }
 }
 
 function scheduleCapture(windowId?: number): void {
@@ -428,7 +473,7 @@ async function captureCurrentTab(windowId?: number): Promise<void> {
       active: true,
       windowId: window.id,
     });
-    if (!isPreviewable(tab) || tab.status !== "complete") return;
+    if (!isLivePreviewable(tab) || tab.status !== "complete") return;
     if (shownOwners.has(tab.id!)) return;
     const existing = previews.get(tab.id!);
     if (
@@ -454,7 +499,7 @@ async function captureCurrentTab(windowId?: number): Promise<void> {
     ]);
     if (
       !isCurrentCapture(revision, currentEpoch) ||
-      !isPreviewable(latestTab) ||
+      !isLivePreviewable(latestTab) ||
       !latestTab.active ||
       latestTab.url !== tab.url ||
       latestTab.windowId !== tab.windowId ||
@@ -485,15 +530,19 @@ function isCurrentCapture(revision: number, currentEpoch: number): boolean {
   return enabled && revision === captureRevision && currentEpoch === epoch;
 }
 
+/** Cached snapshots remain readable while their unchanged tab is discarded. */
 function isPreviewable(tab?: chrome.tabs.Tab): tab is chrome.tabs.Tab {
   return (
     !!tab &&
     Number.isInteger(tab.id) &&
     !tab.incognito &&
-    !tab.discarded &&
     typeof tab.url === "string" &&
     /^https?:\/\//.test(tab.url)
   );
+}
+
+function isLivePreviewable(tab?: chrome.tabs.Tab): tab is chrome.tabs.Tab {
+  return isPreviewable(tab) && !tab.discarded;
 }
 
 async function getTab(tabId: number): Promise<chrome.tabs.Tab | undefined> {

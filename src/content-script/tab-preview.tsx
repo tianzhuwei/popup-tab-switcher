@@ -10,11 +10,16 @@ interface IProps {
 }
 
 const CHANNEL = "popup-tab-switcher-preview";
+const SESSION_REFRESH_INTERVAL = 25 * 60 * 1000;
 
 export function TabPreview(props: IProps) {
   let frame: HTMLIFrameElement;
   let token: string | undefined;
+  let sessionOpenedAt = 0;
+  let sessionPending = false;
   let ready = false;
+  let hasImage = false;
+  let requestId = 0;
   let settled = false;
   let disposed = false;
   let selectionTimer: number | undefined;
@@ -57,14 +62,7 @@ export function TabPreview(props: IProps) {
     if (card) resizeObserver.observe(card);
     tabList = props.element.shadowRoot?.querySelector(".card__tabs") || null;
     tabList?.addEventListener("scroll", scheduleLayout, { passive: true });
-    sendMessageAndGetResponse(openTabPreview()).then(
-      (session) => {
-        if (disposed) return;
-        token = session;
-        publishTarget();
-      },
-      () => clearPreview()
-    );
+    requestSession();
   });
 
   onCleanup(() => {
@@ -95,7 +93,29 @@ export function TabPreview(props: IProps) {
     frame?.contentWindow?.postMessage({ channel: CHANNEL, ...message }, origin);
   }
 
+  function requestSession() {
+    if (disposed || sessionPending) return;
+    sessionPending = true;
+    token = undefined;
+    clearPreview();
+    void sendMessageAndGetResponse(openTabPreview())
+      .then(
+        (session) => {
+          if (disposed) return;
+          token = session;
+          sessionOpenedAt = Date.now();
+          publishTarget();
+        },
+        () => clearPreview()
+      )
+      .finally(() => {
+        sessionPending = false;
+      });
+  }
+
   function clearPreview() {
+    hasImage = false;
+    requestId += 1;
     if (!frame) return;
     frame.style.visibility = "hidden";
     post({ type: "clear" });
@@ -103,13 +123,29 @@ export function TabPreview(props: IProps) {
 
   function onFrameMessage(event: MessageEvent) {
     if (
-      event.source === frame?.contentWindow &&
-      event.origin === origin &&
-      event.data?.channel === CHANNEL &&
-      event.data.type === "ready"
-    ) {
+      disposed ||
+      event.source !== frame?.contentWindow ||
+      event.origin !== origin ||
+      event.data?.channel !== CHANNEL
+    )
+      return;
+    if (event.data.type === "ready") {
+      hasImage = false;
+      frame.style.visibility = "hidden";
       ready = true;
       publishTarget();
+    } else if (
+      event.data.type === "preview-state" &&
+      event.data.requestId === requestId &&
+      event.data.tabId === props.tab?.id &&
+      typeof event.data.available === "boolean"
+    ) {
+      hasImage = event.data.available;
+      if (hasImage) {
+        scheduleLayout();
+      } else {
+        frame.style.visibility = "hidden";
+      }
     }
   }
 
@@ -117,7 +153,13 @@ export function TabPreview(props: IProps) {
     const tab = props.tab;
     if (disposed || !ready || !settled || !token || tab?.id === undefined)
       return;
+    // Refresh lazily when a long-open popup next requests a target.
+    if (Date.now() - sessionOpenedAt >= SESSION_REFRESH_INTERVAL) {
+      requestSession();
+      return;
+    }
     post({
+      requestId: ++requestId,
       token,
       tabId: tab.id,
       title: tab.title || "",
@@ -138,7 +180,7 @@ export function TabPreview(props: IProps) {
   }
 
   function positionPreview() {
-    if (disposed || !frame || !ready || !settled || !token) return;
+    if (disposed || !frame || !ready || !settled || !token || !hasImage) return;
     const card = props.element.shadowRoot?.querySelector(".card");
     if (!card) return;
     const rect = card.getBoundingClientRect();
