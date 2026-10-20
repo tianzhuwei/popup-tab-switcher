@@ -22,6 +22,7 @@ import {
 import { log } from "../utils/logger";
 import { createPopupStore } from "./popup-store";
 import { PopupTab } from "./popup-tab";
+import { PopupSelection } from "./popup-selection";
 import { TabPreview } from "./tab-preview";
 import uuid from "../utils/uuid";
 import { SelectionAndFocus } from "./selection-and-focus";
@@ -60,6 +61,7 @@ function Popup({ element }: IProps) {
   const protectedTabCount = createMemo(
     () => store.tabs.filter((tab) => isProtected(tab.id)).length
   );
+  const tabOrder = createMemo(() => store.tabs.map((tab) => tab.id).join(","));
   // Settings previews stay open when focus moves back to the settings panel.
   let isSettingsDemo = false;
   // Resolves the effective theme (auto follows the OS, or a manual choice).
@@ -272,6 +274,17 @@ function Popup({ element }: IProps) {
                       card__sectionSurface_afterFixed: protectedTabCount() > 0,
                     }}
                     aria-hidden="true"
+                  />
+                </Show>
+                <Show when={store.tabs.length > 0}>
+                  <PopupSelection
+                    isActive={store.isOpen}
+                    isMotionEnabled={isMotionEnabled()}
+                    selectedTabId={store.tabs[store.selectedTabIndex]?.id}
+                    selectedTabIndex={store.selectedTabIndex}
+                    protectedTabCount={protectedTabCount()}
+                    tabOrder={tabOrder()}
+                    zoomFactor={store.zoomFactor}
                   />
                 </Show>
                 <For each={store.tabs}>

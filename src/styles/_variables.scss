@@ -11,60 +11,61 @@ $color-blue-light: #4285f4;
 
 // Popup surfaces share the same layout with optional glass effects.
 @mixin popup-theme-light() {
-  --card-color: #273c50;
-  --card-background-color: rgba(245, 250, 253, 0.95);
-  --card-glass-background-color: rgba(245, 250, 253, 0.74);
-  --card-border-color: rgba(255, 255, 255, 0.88);
-  --card-blue-reflection: rgba(192, 223, 246, 0.16);
+  --card-color: #2b4152;
+  --card-background-color: rgba(237, 244, 249, 0.95);
+  --card-glass-background-color: rgba(237, 244, 249, 0.82);
+  --card-border-color: rgba(255, 255, 255, 0.84);
+  --card-blue-reflection: rgba(255, 255, 255, 0.45);
   --card-neutral-reflection: rgba(255, 255, 255, 0.22);
-  --card-fixed-background: rgba(214, 233, 247, 0.46);
-  --card-candidates-background: rgba(255, 255, 255, 0.38);
-  --card-shadow: 0 18px 54px rgba(34, 49, 90, 0.14),
-    0 3px 12px rgba(34, 49, 90, 0.06);
+  --card-fixed-background: #f0f3f5;
+  --card-candidates-background: #fff;
+  --card-surface-border-color: rgba(56, 88, 112, 0.07);
+  --card-surface-highlight: rgba(255, 255, 255, 0.72);
+  --card-shadow: 0 16px 42px -12px rgba(35, 74, 105, 0.12);
   --card-glass-highlight: inset 0 0 0 1px rgba(255, 255, 255, 0.38),
     0 0 22px rgba(164, 202, 232, 0.12);
-  --card-button-background: rgba(255, 255, 255, 0.48);
+  --card-button-background: #f8fbfe;
   --card-button-hover-background: rgba(255, 255, 255, 0.82);
   --card-button-border-color: rgba(255, 255, 255, 0.92);
-  --tab_selected-background: linear-gradient(105deg, #c8e4f8 0%, #dcedfa 100%);
-  --tab_selected-border-color: rgba(90, 149, 191, 0.55);
-  --tab_selected-color: #284963;
-  --tab_selected-secondary-color: #526f85;
-  --tab_selected-glow: inset 0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 2px 9px rgba(80, 140, 185, 0.1);
-  --tab_hover-background: rgba(255, 255, 255, 0.48);
-  --tab-secondary-color: #6c8193;
-  --tab_accent-color: #3986be;
+  --tab_selected-background: linear-gradient(108deg, #e7f5ff 0%, #daedfc 100%);
+  --tab_selected-border-color: rgba(77, 152, 200, 0.3);
+  --tab_selected-color: #173f5d;
+  --tab_selected-secondary-color: #38566d;
+  --tab_selected-glow: 0 2px 6px -2px rgba(35, 74, 105, 0.12);
+  --tab_hover-background: rgba(91, 167, 214, 0.09);
+  --tab-secondary-color: #526a7c;
+  --tab_accent-color: #2b78aa;
   --tab__icon_noFavIcon-fill: #7d96a9;
   --tab-button-hover-background: rgba(94, 115, 161, 0.1);
   --scrollbar-thumb: rgba(111, 131, 176, 0.3);
 }
 
 @mixin popup-theme-dark() {
-  --card-color: #edf3f8;
-  --card-background-color: rgba(46, 59, 76, 0.95);
-  --card-glass-background-color: rgba(46, 59, 76, 0.78);
+  --card-color: #e8f0f6;
+  --card-background-color: rgba(48, 59, 69, 0.95);
+  --card-glass-background-color: rgba(48, 59, 69, 0.78);
   --card-border-color: rgba(184, 207, 225, 0.2);
   --card-blue-reflection: rgba(137, 183, 216, 0.1);
   --card-neutral-reflection: rgba(207, 222, 231, 0.04);
-  --card-fixed-background: rgba(96, 126, 154, 0.28);
-  --card-candidates-background: rgba(141, 161, 181, 0.12);
+  --card-fixed-background: #414e5a;
+  --card-candidates-background: #35424e;
+  --card-surface-border-color: rgba(214, 231, 244, 0.08);
+  --card-surface-highlight: rgba(224, 239, 251, 0.08);
   --card-shadow: 0 18px 54px rgba(3, 7, 18, 0.32),
     0 3px 12px rgba(3, 7, 18, 0.14);
   --card-glass-highlight: inset 0 0 0 1px rgba(214, 231, 242, 0.06),
     0 0 24px rgba(112, 160, 193, 0.1);
-  --card-button-background: rgba(162, 192, 215, 0.08);
+  --card-button-background: #465665;
   --card-button-hover-background: rgba(162, 192, 215, 0.17);
   --card-button-border-color: rgba(185, 211, 229, 0.2);
-  --tab_selected-background: linear-gradient(105deg, #4c6c8b 0%, #536f89 100%);
-  --tab_selected-border-color: rgba(167, 205, 235, 0.45);
-  --tab_selected-color: #f4f8fc;
-  --tab_selected-secondary-color: #d0dfeb;
-  --tab_selected-glow: inset 0 0 0 1px rgba(255, 255, 255, 0.1),
-    0 2px 9px rgba(23, 49, 73, 0.12);
-  --tab_hover-background: rgba(183, 210, 232, 0.08);
-  --tab-secondary-color: #b0c0d0;
-  --tab_accent-color: #99c9eb;
+  --tab_selected-background: linear-gradient(108deg, #355b7b 0%, #3c6382 100%);
+  --tab_selected-border-color: rgba(157, 202, 236, 0.25);
+  --tab_selected-color: #edf6fd;
+  --tab_selected-secondary-color: #d1e2ef;
+  --tab_selected-glow: 0 2px 6px -2px rgba(7, 14, 23, 0.3);
+  --tab_hover-background: rgba(224, 240, 252, 0.08);
+  --tab-secondary-color: #b4c4d1;
+  --tab_accent-color: #9dcaec;
   --tab__icon_noFavIcon-fill: #a4bbce;
   --tab-button-hover-background: rgba(188, 215, 235, 0.12);
   --scrollbar-thumb: rgba(170, 195, 215, 0.3);
