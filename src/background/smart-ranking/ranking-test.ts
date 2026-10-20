@@ -1,6 +1,7 @@
 import assert from "assert";
 import { ITab } from "../../utils/check-tab";
 import { parseRankingResponse } from "./model-client";
+import { TabRelations } from "./tab-relations";
 import {
   applyRanking,
   createRankingInput,
@@ -129,6 +130,86 @@ describe("smart ranking policy", () => {
       tabs[1] = tab(2, "https://b.com", "(3) Inbox");
       const after = createRankingPlan(input(tabs), new Map(), 0)!;
       assert.strictEqual(before.signature, after.signature);
+    });
+
+    it("exposes tab-specific evidence for pages on the same domain without sending URLs", () => {
+      const tabs = [
+        tab(1, "https://example.com/current?private=one"),
+        tab(2, "https://example.com/issue?private=two"),
+        tab(3, "https://example.com/pull?private=three"),
+      ];
+      const relations = new TabRelations();
+      relations.restore(undefined, [
+        tabs[0],
+        { ...tabs[1], openerTabId: 1 },
+        tabs[2],
+      ]);
+      relations.recordVisit(tabs[0], 1000);
+      relations.recordVisit(tabs[1], 2000);
+      relations.recordVisit(tabs[0], 3000);
+      const plan = createRankingPlan(input(tabs), new Map(), 3000, relations)!;
+      const state = plan.state as {
+        candidates: {
+          id: string;
+          relationshipToCurrent: string;
+          tabVisits: number;
+          transitionsFromCurrentTab: number;
+        }[];
+      };
+      const child = state.candidates.find(
+        (candidate) => candidate.id === "tab_2"
+      )!;
+      const unrelated = state.candidates.find(
+        (candidate) => candidate.id === "tab_3"
+      )!;
+      assert.strictEqual(child.relationshipToCurrent, "child");
+      assert.strictEqual(child.tabVisits, 1);
+      assert.strictEqual(child.transitionsFromCurrentTab, 1);
+      assert.strictEqual(unrelated.relationshipToCurrent, "unknown");
+      assert.strictEqual(unrelated.tabVisits, 0);
+      const payload = JSON.stringify({
+        state: plan.state,
+        criteria: plan.criteria,
+      });
+      assert.ok(!payload.includes("private="));
+      assert.ok(!payload.includes("/issue"));
+    });
+
+    it("includes an older related tab in the bounded candidate shortlist", () => {
+      const tabs = Array.from({ length: 30 }, (_, index) =>
+        tab(index + 1, `https://example.com/${index + 1}`)
+      );
+      const relations = new TabRelations();
+      relations.restore(
+        undefined,
+        tabs.map((item) =>
+          item.id === 30 ? { ...item, openerTabId: 1 } : item
+        )
+      );
+      const plan = createRankingPlan(input(tabs), new Map(), 1000, relations)!;
+      assert.strictEqual(plan.candidates.length, 20);
+      assert.ok(plan.candidates.some((candidate) => candidate.id === 30));
+    });
+
+    it("invalidates cached plans when tab evidence changes but ignores title-only updates", () => {
+      const tabs = [tab(1, "https://a.com"), tab(2, "https://b.com")];
+      const relations = new TabRelations();
+      relations.restore(undefined, tabs);
+      const before = createRankingPlan(
+        input(tabs),
+        new Map(),
+        1000,
+        relations
+      )!;
+      relations.recordVisit(tabs[0], 1000);
+      relations.recordVisit(tabs[1], 1000);
+      const after = createRankingPlan(input(tabs), new Map(), 1000, relations)!;
+      assert.notStrictEqual(before.signature, after.signature);
+      relations.update({ ...tabs[1], title: "(3) Inbox" });
+      assert.strictEqual(
+        after.signature,
+        createRankingPlan(input(tabs), new Map(), 1000, relations)!.signature
+      );
     });
 
     it("still plans when the current page is private", () => {

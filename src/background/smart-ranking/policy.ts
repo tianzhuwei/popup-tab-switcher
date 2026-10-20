@@ -21,6 +21,31 @@ export interface IRankingInput {
   scope: string;
 }
 
+export interface IRankingTabFeatures {
+  relationshipToCurrent:
+    | "parent"
+    | "child"
+    | "ancestor"
+    | "descendant"
+    | "sibling"
+    | "related"
+    | "unknown";
+  openerDistance: number | null;
+  tabVisits: number;
+  minutesSinceTabVisit: number | null;
+  transitionsFromCurrentTab: number;
+  transitionsToCurrentTab: number;
+}
+
+export interface IRankingRelations {
+  revision: number;
+  getFeatures(
+    currentId: number,
+    candidateId: number,
+    now: number
+  ): IRankingTabFeatures;
+}
+
 export interface IRankingPlan {
   key: string;
   signature: string;
@@ -58,7 +83,7 @@ export function createRankingInput(
   };
 }
 
-export function getPublicTabMetadata(tab: chrome.tabs.Tab) {
+export function getPublicTabMetadata(tab: Partial<chrome.tabs.Tab>) {
   if (tab.incognito) return;
   try {
     const url = new URL(tab.url || tab.pendingUrl || "");
@@ -86,7 +111,8 @@ export function decayCount(count: number, since: number, now: number): number {
 export function createRankingPlan(
   input: IRankingInput,
   usage: Map<string, IDomainUsage>,
-  now = Date.now()
+  now = Date.now(),
+  relations?: IRankingRelations
 ): IRankingPlan | undefined {
   const current = input.recentTabs.find((tab) => tab.id === input.activeTabId);
   if (!current) return;
@@ -106,13 +132,17 @@ export function createRankingPlan(
     .map((tab, index) => {
       const page = getPublicTabMetadata(tab);
       const history = page && usage.get(page.domain);
+      const features = relations?.getFeatures(current.id, tab.id, now);
       return {
         tab,
         page,
         score:
           1 / (index + 1) +
           Math.log1p(getVisits(history)) * 0.1 +
-          Math.log1p(getTransitions(history)) * 0.2,
+          Math.log1p(getTransitions(history)) * 0.2 +
+          Math.log1p(features?.tabVisits || 0) * 0.1 +
+          Math.log1p(features?.transitionsFromCurrentTab || 0) * 0.3 +
+          (features?.openerDistance ? 0.3 / features.openerDistance : 0),
       };
     })
     .filter(({ tab, page }) => page && tab.id !== current.id)
@@ -136,6 +166,7 @@ export function createRankingPlan(
       domainVisits: Math.round(getVisits(history) * 10) / 10,
       transitionsFromCurrentDomain:
         Math.round(getTransitions(history) * 10) / 10,
+      ...relations?.getFeatures(current.id, tab.id, now),
     };
   });
   const time = new Date(now);
@@ -149,6 +180,7 @@ export function createRankingPlan(
       input.pinnedTabIds,
       candidates.map((tab) => [tab.id, getPublicTabMetadata(tab)!.domain]),
       input.recentTabs.map((tab) => tab.id),
+      relations?.revision ?? 0,
     ]),
     candidates,
     criteria,

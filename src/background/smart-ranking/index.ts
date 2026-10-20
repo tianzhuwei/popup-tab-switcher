@@ -11,6 +11,7 @@ import {
   normalizeSmartRankingConfig,
   normalizeSmartRankingProviders,
 } from "../../utils/smart-ranking";
+import { TabRelations } from "./tab-relations";
 import { RankingRequestError, requestTabRanking } from "./model-client";
 import {
   applyRanking,
@@ -27,13 +28,14 @@ const CONFIG_KEY = "smartRankingConfig";
 const PROVIDERS_KEY = "smartRankingProviders";
 const HISTORY_KEY = "smartRankingHistory";
 const CACHE_KEY = "smartRankingCache";
+const TAB_RELATIONS_KEY = "smartRankingTabRelations";
 const USAGE_COUNTER_KEY = "smartRankingDailyUsage";
 const REQUEST_INTERVAL = 10_000;
 const CACHE_DURATION = 10 * 60_000;
 // Background prefetching waits for the user to settle on a page.
 const PREFETCH_DWELL = 1500;
-// An opening popup waits this long before showing visit order; the request
-// keeps running and caches its result for the next opening.
+// An open popup waits this long for a late ranking update; the initial list
+// appears immediately and the request continues warming the cache afterward.
 const POPUP_WAIT = 2000;
 const REQUEST_TIMEOUT = 8000;
 const RETRY_DELAY = 60_000;
@@ -88,27 +90,47 @@ let pausedRevision: number | undefined;
 let dailyUsage = { day: "", count: 0 };
 let lastObserved: { id: number; domain: string } | undefined;
 let saveQueue = Promise.resolve();
+let observationQueue = Promise.resolve();
+const relations = new TabRelations();
 const usage = new Map<string, IDomainUsage>();
 const cache = new Map<string, ICachedRanking>();
 
 export function initSmartRanking(): void {
   void initialize();
+  chrome.tabs.onCreated.addListener((tab) => {
+    queueObservation(() => relations.update(tab));
+    scheduleSmartRanking();
+  });
   chrome.tabs.onActivated.addListener(({ tabId }) => {
-    void observeTab(tabId);
+    queueObservation(() => observeTab(tabId, true));
     scheduleSmartRanking();
   });
   chrome.windows.onFocusChanged.addListener(() => {
-    void observeActiveTab();
+    queueObservation(observeActiveTab);
     scheduleSmartRanking();
   });
   // Title-only changes do not affect cached plans, so they are ignored.
   chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
     if (change.url || change.status === "complete") {
-      if (tab.active) void observeTab(tabId);
+      queueObservation(async () => {
+        relations.update(tab);
+        if (tab.active) await observeTab(tabId);
+      });
       scheduleSmartRanking();
     }
   });
-  chrome.tabs.onRemoved.addListener(() => scheduleSmartRanking());
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    queueObservation(() => relations.close(tabId));
+    scheduleSmartRanking();
+  });
+  chrome.tabs.onReplaced.addListener((addedId, removedId) => {
+    queueObservation(async () => {
+      const tab = await chrome.tabs.get(addedId);
+      relations.replace(removedId, tab);
+      if (tab.active) await observeTab(addedId);
+    });
+    scheduleSmartRanking();
+  });
   chrome.permissions.onRemoved.addListener(() => {
     revision += 1;
     controller?.abort();
@@ -198,7 +220,19 @@ function initialize(): Promise<void> {
           }
         }
       }
-      const session = await chrome.storage.session.get(CACHE_KEY);
+      const session = await chrome.storage.session.get([
+        CACHE_KEY,
+        TAB_RELATIONS_KEY,
+      ]);
+      if (config.enabled) {
+        relations.restore(
+          session[TAB_RELATIONS_KEY],
+          await chrome.tabs.query({})
+        );
+        persistRelations();
+      } else {
+        await chrome.storage.session.remove(TAB_RELATIONS_KEY);
+      }
       if (Array.isArray(session[CACHE_KEY])) {
         for (const entry of session[CACHE_KEY].slice(-MAX_CACHE_ENTRIES)) {
           if (!Array.isArray(entry)) continue;
@@ -279,6 +313,7 @@ export async function saveSmartRankingConfig(
       [CONFIG_KEY]: next,
       [PROVIDERS_KEY]: nextProviders,
     });
+    await observationQueue;
     config = next;
     providers = nextProviders;
     revision += 1;
@@ -294,6 +329,13 @@ export async function saveSmartRankingConfig(
     if (!next.enabled) {
       usage.clear();
       persistHistory();
+      relations.clear();
+      persistRelations();
+    } else {
+      queueObservation(async () => {
+        relations.restore(relations.serialize(), await chrome.tabs.query({}));
+        await observeActiveTab();
+      });
     }
     status = next.enabled
       ? {
@@ -324,13 +366,14 @@ export async function resetSmartRanking(): Promise<void> {
 /** Reading the cache never waits for a model or pushes changes into an open popup. */
 export async function getSmartRankingSnapshot(input: IRankingInput) {
   await initialize();
+  await observationQueue;
   const fallback = {
     tabs: input.visibleTabs,
     tabProbabilities: {} as Record<string, number>,
     pending: false,
   };
   if (!config.enabled) return fallback;
-  const plan = createRankingPlan(input, usage);
+  const plan = createRankingPlan(input, usage, Date.now(), relations);
   if (!plan) return fallback;
   const prediction = getCachedPrediction(plan);
   if (!prediction) {
@@ -345,15 +388,16 @@ export async function requestSmartRankingSnapshot(
   input: IRankingInput
 ): Promise<IRankingSnapshot | undefined> {
   await initialize();
+  await observationQueue;
   if (!config.enabled) return;
   const requestedRevision = revision;
-  const plan = createRankingPlan(input, usage);
+  const plan = createRankingPlan(input, usage, Date.now(), relations);
   if (!plan) return;
   let waitTimer: ReturnType<typeof setTimeout> | undefined;
   const prediction = await Promise.race([
     requestPrediction(plan, true, requestedRevision),
     new Promise<undefined>((resolve) => {
-      waitTimer = setTimeout(resolve, POPUP_WAIT);
+      waitTimer = setTimeout(() => resolve(undefined), POPUP_WAIT);
     }),
   ]);
   if (waitTimer !== undefined) clearTimeout(waitTimer);
@@ -401,6 +445,7 @@ export function scheduleSmartRanking(): void {
 
 async function refreshRanking(): Promise<void> {
   await initialize();
+  await observationQueue;
   if (!config.enabled || refreshing) return;
   refreshing = true;
   const requestedRevision = revision;
@@ -434,7 +479,7 @@ async function refreshRanking(): Promise<void> {
     );
     // The registry normally catches up within the dwell; skip a stale view.
     if (input.activeTabId !== active.id) return;
-    const plan = createRankingPlan(input, usage);
+    const plan = createRankingPlan(input, usage, Date.now(), relations);
     if (!plan) return;
     await requestPrediction(plan, false, requestedRevision);
   } catch {
@@ -634,16 +679,21 @@ function countRequest(): void {
 }
 
 /** Records visits as they happen, independent of model scheduling. */
-async function observeTab(tabId: number): Promise<void> {
+async function observeTab(
+  tabId: number,
+  activationEvent = false
+): Promise<void> {
   await initialize();
   if (!config.enabled) return;
   try {
     const tab = await chrome.tabs.get(tabId);
-    if (!tab.active) return;
+    if (!activationEvent && !tab.active) return;
     const window = await chrome.windows.get(tab.windowId);
     if (!window.focused) return;
+    relations.recordVisit(tab);
     const page = getPublicTabMetadata(tab);
     if (page) recordVisit(tabId, page.domain);
+    else lastObserved = undefined;
   } catch {
     // The tab or window may have closed meanwhile.
   }
@@ -691,6 +741,29 @@ function recordVisit(tabId: number, domain: string): void {
   lastObserved = { id: tabId, domain };
   while (usage.size > MAX_DOMAINS) usage.delete(usage.keys().next().value!);
   persistHistory();
+}
+
+/** Serialize browser events so activation and navigation observations keep their order. */
+function queueObservation(action: () => void | Promise<void>): void {
+  observationQueue = observationQueue
+    .then(async () => {
+      await initialize();
+      if (!config.enabled) return;
+      await action();
+      persistRelations();
+    })
+    .catch(() => {});
+}
+
+function persistRelations(): void {
+  const snapshot = config.enabled ? relations.serialize() : undefined;
+  saveQueue = saveQueue
+    .then(() =>
+      snapshot
+        ? chrome.storage.session.set({ [TAB_RELATIONS_KEY]: snapshot })
+        : chrome.storage.session.remove(TAB_RELATIONS_KEY)
+    )
+    .catch(() => {});
 }
 
 function persistHistory(): void {
