@@ -105,7 +105,7 @@
 .card__tabList {
   position: relative;
   isolation: isolate;
-  padding: calc(var(--popup-unit) * 4) calc(var(--popup-unit) * 4) 0;
+  padding: calc(var(--popup-unit) * 4);
 
   &:empty {
     padding: 0;
@@ -127,17 +127,11 @@
       var(--tab-height) * var(--protected-count) + var(--popup-unit) * 8
     );
     background-color: var(--card-fixed-background);
-
-    &.card__sectionSurface_last {
-      height: calc(
-        var(--tab-height) * var(--protected-count) + var(--popup-unit) * 4
-      );
-    }
   }
 
   &_candidates {
     height: calc(
-      var(--tab-height) * var(--candidate-count) + var(--popup-unit) * 4
+      var(--tab-height) * var(--candidate-count) + var(--popup-unit) * 8
     );
     background-color: var(--card-candidates-background);
   }
@@ -146,14 +140,6 @@
     top: calc(
       var(--tab-height) * var(--protected-count) + var(--popup-unit) * 16
     );
-  }
-
-  &_last {
-    border-bottom-right-radius: 0;
-    border-bottom-left-radius: 0;
-    box-shadow: inset var(--popup-unit) 0 0 var(--card-surface-border-color),
-      inset calc(var(--popup-unit) * -1) 0 0 var(--card-surface-border-color),
-      inset 0 var(--popup-unit) 0 var(--card-surface-highlight);
   }
 }
 
@@ -238,25 +224,28 @@
   flex: 0 0 var(--popup-footer-height);
   align-items: center;
   justify-content: center;
-  gap: calc(var(--popup-unit) * 4);
   box-sizing: border-box;
   width: var(--popup-list-width, 100%);
+  margin-top: calc(var(--popup-unit) * 6);
   padding: calc(var(--popup-unit) * 4);
-  border-radius: 0 0 calc(var(--popup-unit) * 12) calc(var(--popup-unit) * 12);
-  background-color: var(--card-candidates-background);
-  box-shadow: inset var(--popup-unit) 0 0 var(--card-surface-border-color),
-    inset calc(var(--popup-unit) * -1) 0 0 var(--card-surface-border-color),
-    inset 0 calc(var(--popup-unit) * -1) 0 var(--card-surface-border-color);
-
-  &_fixed {
-    background-color: var(--card-fixed-background);
-  }
+  border-radius: calc(var(--popup-unit) * 10);
+  background-color: var(--card-footer-background);
+  box-shadow: inset 0 0 0 var(--popup-unit) var(--card-surface-border-color),
+    inset 0 var(--popup-unit) 0 var(--card-surface-highlight);
 
   &_empty {
+    margin-top: 0;
     padding: calc(var(--popup-unit) * 2);
-    border-radius: calc(var(--popup-unit) * 12);
-    box-shadow: inset 0 0 0 var(--popup-unit) var(--card-surface-border-color),
-      inset 0 var(--popup-unit) 0 var(--card-surface-highlight);
+  }
+}
+
+.card__footerActions {
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  > .card__groupButton {
+    margin-left: calc(var(--popup-unit) * 4);
   }
 }
 
@@ -264,6 +253,7 @@
   all: unset;
   box-sizing: border-box;
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   width: calc(var(--popup-unit) * 56);
@@ -274,8 +264,9 @@
 
   &:not(:disabled):hover,
   &:focus-visible {
-    background-color: var(--tab_hover-background);
+    background-color: var(--card-action-hover-background);
     color: var(--tab_accent-color);
+    box-shadow: inset 0 0 0 var(--popup-unit) var(--card-surface-border-color);
   }
 
   &:disabled {
@@ -287,6 +278,35 @@
 .card__actionIcon {
   width: calc(var(--popup-unit) * 16);
   height: calc(var(--popup-unit) * 16);
+}
+
+.card__undoSlot {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  width: 0;
+  height: calc(var(--popup-button-size) + var(--popup-unit) * 8);
+  margin: calc(var(--popup-unit) * -4) 0;
+  overflow: hidden;
+  visibility: hidden;
+
+  > .card__actionButton {
+    margin-left: calc(var(--popup-unit) * 4);
+    opacity: 0;
+  }
+
+  &_visible {
+    width: calc(var(--popup-unit) * 60);
+    visibility: visible;
+
+    > .card__actionButton {
+      opacity: 1;
+
+      &:disabled {
+        opacity: 0.45;
+      }
+    }
+  }
 }
 
 .card__actionStatus {
@@ -584,7 +604,6 @@
     transform: translateY(calc(var(--popup-unit) * -1));
   }
 
-  .card__actionButton,
   .tab__closeButton,
   .tab__previewButton,
   .tab__pinButton {
@@ -593,6 +612,51 @@
 
     &:active {
       transform: scale(0.94);
+    }
+  }
+
+  .card__actionButton {
+    transition: opacity 130ms ease-out, color 130ms ease-out,
+      background-color 130ms ease-out, box-shadow 130ms ease-out,
+      transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1.2);
+
+    &:not(:disabled):hover,
+    &:not(:disabled):focus-visible {
+      transform: translateY(calc(var(--popup-unit) * -1));
+
+      .card__actionIcon {
+        transform: scale(1.14);
+      }
+    }
+
+    &:not(:disabled):active {
+      transform: scale(0.94);
+
+      .card__actionIcon {
+        transform: scale(0.96);
+      }
+    }
+  }
+
+  .card__actionIcon {
+    transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1.2);
+  }
+
+  .card__undoSlot {
+    // Its changing width also shifts the two existing buttons smoothly around center.
+    transition: width 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      visibility 0s linear 200ms;
+
+    > .card__actionButton {
+      transform: translateX(calc(var(--popup-unit) * -8)) scale(0.88);
+    }
+
+    &_visible {
+      transition: width 200ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s;
+
+      > .card__actionButton {
+        transform: none;
+      }
     }
   }
 }
@@ -618,6 +682,8 @@
     .tab::before,
     .tab__favicon,
     .card__actionButton,
+    .card__actionIcon,
+    .card__undoSlot,
     .tab__closeButton,
     .tab__previewButton,
     .tab__pinButton {
@@ -629,6 +695,22 @@
     }
 
     .tab:hover .tab__favicon {
+      transform: none;
+    }
+
+    .card__actionButton:not(:disabled) {
+      &:hover,
+      &:focus-visible,
+      &:active {
+        transform: none;
+
+        .card__actionIcon {
+          transform: none;
+        }
+      }
+    }
+
+    .card__undoSlot > .card__actionButton {
       transform: none;
     }
   }

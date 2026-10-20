@@ -1,4 +1,3 @@
-import { Show } from "solid-js/web";
 import { createEffect, createSignal, on, onCleanup } from "solid-js";
 import {
   getWebsiteGroupingState,
@@ -19,6 +18,9 @@ export function WebsiteGrouping(props: IProps) {
   const [feedback, setFeedback] = createSignal("");
   let isDisposed = false;
   let requestRevision = 0;
+  let groupButton: HTMLButtonElement | undefined;
+  let undoButton: HTMLButtonElement | undefined;
+  let shouldRestoreGroupFocus = false;
 
   createEffect(
     on(
@@ -29,12 +31,19 @@ export function WebsiteGrouping(props: IProps) {
         void sendMessageAndGetResponse(getWebsiteGroupingState())
           .then((state) => {
             if (!isDisposed && revision === requestRevision)
-              setCanUndo(state?.canUndo || false);
+              updateUndoAvailability(state?.canUndo || false);
           })
           .catch(() => {});
       }
     )
   );
+
+  createEffect(() => {
+    if (!canUndo() && !isBusy() && props.isOpen && shouldRestoreGroupFocus) {
+      shouldRestoreGroupFocus = false;
+      groupButton?.focus({ preventScroll: true });
+    }
+  });
 
   onCleanup(() => {
     isDisposed = true;
@@ -44,6 +53,7 @@ export function WebsiteGrouping(props: IProps) {
   return (
     <>
       <button
+        ref={groupButton}
         type="button"
         class="card__actionButton card__groupButton"
         title={
@@ -71,13 +81,19 @@ export function WebsiteGrouping(props: IProps) {
           <path d="M5 6V10M8 6V10M11 6V10" />
         </svg>
       </button>
-      <Show when={canUndo()}>
+      <span
+        class="card__undoSlot"
+        classList={{ card__undoSlot_visible: canUndo() }}
+        aria-hidden={!canUndo()}
+      >
         <button
+          ref={undoButton}
           type="button"
           class="card__actionButton card__groupButton"
           title="Undo last website grouping"
           aria-label="Undo last website grouping"
-          disabled={isBusy() || !props.isOpen}
+          disabled={!canUndo() || isBusy() || !props.isOpen}
+          tabIndex={canUndo() ? 0 : -1}
           onClick={() => runAction(true)}
         >
           <svg
@@ -95,15 +111,30 @@ export function WebsiteGrouping(props: IProps) {
             <path d="M5.5 3.5L2.5 6.5L5.5 9.5M3 6.5H9A3.5 3.5 0 0 1 9 13H7" />
           </svg>
         </button>
-      </Show>
+      </span>
       <span class="card__actionStatus" role="status">
         {feedback()}
       </span>
     </>
   );
 
+  function isUndoFocused() {
+    return (
+      !!undoButton &&
+      (undoButton.getRootNode() as Document | ShadowRoot).activeElement ===
+        undoButton
+    );
+  }
+
+  function updateUndoAvailability(available: boolean, wasUndoFocused = false) {
+    if (!available && (wasUndoFocused || isUndoFocused()))
+      shouldRestoreGroupFocus = true;
+    setCanUndo(available);
+  }
+
   async function runAction(undo: boolean) {
     if (isBusy() || !props.isOpen) return;
+    const wasUndoFocused = isUndoFocused();
     ++requestRevision;
     setIsBusy(true);
     setFeedback("");
@@ -115,7 +146,7 @@ export function WebsiteGrouping(props: IProps) {
       if (isDisposed) return;
       if (!result)
         throw new Error("The extension is unavailable. Reopen the switcher.");
-      setCanUndo(result.canUndo);
+      updateUndoAvailability(result.canUndo, wasUndoFocused);
       setFeedback(getFeedback(result));
     } catch (error) {
       if (!isDisposed)

@@ -266,16 +266,12 @@ function Popup({ element }: IProps) {
                 <Show when={protectedTabCount() > 0}>
                   <div
                     class="card__sectionSurface card__sectionSurface_fixed"
-                    classList={{
-                      card__sectionSurface_last:
-                        store.tabs.length === protectedTabCount(),
-                    }}
                     aria-hidden="true"
                   />
                 </Show>
                 <Show when={store.tabs.length > protectedTabCount()}>
                   <div
-                    class="card__sectionSurface card__sectionSurface_candidates card__sectionSurface_last"
+                    class="card__sectionSurface card__sectionSurface_candidates"
                     classList={{
                       card__sectionSurface_afterFixed: protectedTabCount() > 0,
                     }}
@@ -362,39 +358,38 @@ function Popup({ element }: IProps) {
             <div
               class="card__footer"
               classList={{
-                card__footer_fixed:
-                  store.tabs.length > 0 &&
-                  store.tabs.length === protectedTabCount(),
                 card__footer_empty: store.tabs.length === 0,
               }}
             >
-              <button
-                type="button"
-                class="card__actionButton"
-                title="New tab"
-                aria-label="New tab"
-                onClick={openNewTab}
-              >
-                <svg
-                  class="card__actionIcon"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  aria-hidden="true"
+              <div class="card__footerActions">
+                <button
+                  type="button"
+                  class="card__actionButton"
+                  title="New tab"
+                  aria-label="New tab"
+                  onClick={openNewTab}
                 >
-                  <path
-                    d="M8 3V13M3 8H13"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                  />
-                </svg>
-              </button>
-              <WebsiteGrouping
-                isOpen={store.isOpen && !isSettingsDemo}
-                onBusyChange={setGroupingBusy}
-              />
+                  <svg
+                    class="card__actionIcon"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M8 3V13M3 8H13"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </button>
+                <WebsiteGrouping
+                  isOpen={store.isOpen && !isSettingsDemo}
+                  onBusyChange={setGroupingBusy}
+                />
+              </div>
             </div>
           </div>
           <Show when={store.isOpen && store.settings.isTabPreviewEnabled}>
@@ -456,9 +451,9 @@ function Popup({ element }: IProps) {
         ? numberOfTabsToShow
         : Math.max(store.tabs.length, 1);
     const footerHeight = store.tabs.length ? 32 : 28;
-    // The last group's bottom padding is shared with the integrated footer.
+    // Each list surface has 4px padding above and below; the toolbar has a 6px gap.
     const groupSpacing = store.tabs.length
-      ? 4 +
+      ? 14 +
         (protectedTabCount() > 0 && protectedTabCount() < store.tabs.length
           ? 16
           : 0)
