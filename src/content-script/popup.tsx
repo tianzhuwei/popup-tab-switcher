@@ -425,7 +425,7 @@ function Popup({ element }: IProps) {
       numberOfTabsToShow > 0
         ? numberOfTabsToShow
         : Math.max(store.tabs.length, 1);
-    const footerHeight = 36;
+    const footerHeight = 28;
     // Group padding adds 8px; a second group adds its padding and an 8px gap.
     const groupSpacing = store.tabs.length
       ? 8 +
@@ -433,8 +433,9 @@ function Popup({ element }: IProps) {
           ? 16
           : 0)
       : 0;
+    // Card padding is 8px above and 4px below, with two 1px borders.
     const maxPopupHeight =
-      visibleTabCount * rowHeight + footerHeight + 18 + groupSpacing;
+      visibleTabCount * rowHeight + footerHeight + 14 + groupSpacing;
     const popupBorderRadius = 16;
     const tabHorizontalPadding = 12;
     element.style.setProperty("--popup-unit", `${1 / zoomFactor}px`);
@@ -442,7 +443,7 @@ function Popup({ element }: IProps) {
       "--popup-footer-height",
       `${footerHeight / zoomFactor}px`
     );
-    element.style.setProperty("--popup-button-size", `${26 / zoomFactor}px`);
+    element.style.setProperty("--popup-button-size", `${24 / zoomFactor}px`);
     element.style.setProperty("--popup-width", `${popupWidth / zoomFactor}px`);
     element.style.setProperty(
       "--popup-max-height",

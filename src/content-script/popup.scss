@@ -46,6 +46,7 @@
   flex-direction: column;
   box-sizing: border-box;
   padding: calc(var(--popup-unit) * 8);
+  padding-bottom: calc(var(--popup-unit) * 4);
   width: var(--popup-width);
   max-width: calc(100vw - var(--popup-unit) * 32);
   max-height: min(
@@ -224,6 +225,7 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+  padding-top: calc(var(--popup-unit) * 4);
 }
 
 .card__newTabButton {
