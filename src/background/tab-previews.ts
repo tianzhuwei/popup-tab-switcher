@@ -5,8 +5,8 @@ const SESSIONS_KEY = "tabPreviewSessions";
 const USAGE_KEY = "tabPreviewUsage";
 const MAX_PREVIEWS = 30;
 const MAX_CACHE_BYTES = 10_000_000;
-// Leave space for the registry and other session state below Chrome's 10 MiB quota.
-const SESSION_STORAGE_BUDGET = 9_000_000;
+// Leave space for settings and other local state below Chrome's 10 MiB quota.
+const LOCAL_STORAGE_BUDGET = 9_000_000;
 const CAPTURE_DELAY = 650;
 const CAPTURE_INTERVAL = 1100;
 const SAME_PAGE_INTERVAL = 10_000;
@@ -44,6 +44,7 @@ let lastCapture = 0;
 let capturing = false;
 let captureTimer: ReturnType<typeof setTimeout> | undefined;
 let pendingWindowId: number | undefined;
+let clearingOnStartup = false;
 let queue: Promise<unknown> = Promise.resolve();
 const previews = new Map<number, ICachedPreview>();
 const sessions = new Map<string, IPreviewSession>();
@@ -55,6 +56,18 @@ const visibilityRevisions = new Map<number, number>();
 export function initTabPreviews(): void {
   if (initialized) return;
   initialized = true;
+  chrome.runtime.onStartup.addListener(() => {
+    clearingOnStartup = true;
+    epoch += 1;
+    captureRevision += 1;
+    if (captureTimer !== undefined) clearTimeout(captureTimer);
+    void serialize(async () => {
+      clearCachedPreviews();
+      await clearStoredPreviews();
+      clearingOnStartup = false;
+      scheduleCapture();
+    });
+  });
   queue = loadState();
 
   chrome.tabs.onActivated.addListener(({ windowId }) => {
@@ -108,17 +121,8 @@ export async function setTabPreviewsEnabled(value: boolean): Promise<void> {
     captureRevision += 1;
     if (captureTimer !== undefined) clearTimeout(captureTimer);
     await serialize(async () => {
-      for (const ownerTabId of restoredOwners) shownOwners.delete(ownerTabId);
-      restoredOwners.clear();
-      previews.clear();
-      sessions.clear();
-      if (available) {
-        await chrome.storage.session.remove([
-          CACHE_KEY,
-          SESSIONS_KEY,
-          USAGE_KEY,
-        ]);
-      }
+      clearCachedPreviews();
+      await clearStoredPreviews();
     });
     return;
   }
@@ -298,10 +302,14 @@ function serialize<T>(action: () => Promise<T>): Promise<T> {
 async function loadState(): Promise<void> {
   try {
     const revision = settingsRevision;
-    const [stored, live, local, granted] = await Promise.all([
+    // Local screenshots must never become readable to injected page scripts.
+    await chrome.storage.local.setAccessLevel({
+      accessLevel: "TRUSTED_CONTEXTS",
+    });
+    const [storedSession, live, local, granted] = await Promise.all([
       chrome.storage.session.get([CACHE_KEY, SESSIONS_KEY, USAGE_KEY]),
       chrome.tabs.query({}),
-      chrome.storage.local.get("settings"),
+      chrome.storage.local.get(["settings", CACHE_KEY, USAGE_KEY]),
       hasPermission(),
     ]);
     let loadRevision = revision;
@@ -317,11 +325,19 @@ async function loadState(): Promise<void> {
     enabled = loadDesired && loadGranted;
     available = true;
     if (!enabled) {
-      await chrome.storage.session.remove([CACHE_KEY, SESSIONS_KEY, USAGE_KEY]);
+      await clearStoredPreviews();
       return;
     }
+    // onStartup has queued a reset behind initialization; do not restore old images.
+    if (clearingOnStartup) return;
+    // Migrate any surviving legacy session cache without replacing a local cache.
+    const storedPreviews = local[CACHE_KEY] ?? storedSession[CACHE_KEY] ?? [];
+    const storedUsage = local[USAGE_KEY] ?? storedSession[USAGE_KEY];
     const openTabs = new Map(live.map((tab) => [tab.id, tab]));
-    for (const entry of (stored[CACHE_KEY] || []) as ICachedPreview[]) {
+    for (const entry of (Array.isArray(storedPreviews)
+      ? storedPreviews
+      : []) as ICachedPreview[]) {
+      if (!entry) continue;
       const tab = openTabs.get(entry.tabId);
       if (
         isPreviewable(tab) &&
@@ -333,13 +349,14 @@ async function loadState(): Promise<void> {
         entry.width > 0 &&
         entry.height > 0
       ) {
-        const lastUsed = stored[USAGE_KEY]?.[entry.tabId];
+        const lastUsed = storedUsage?.[entry.tabId];
         if (Number.isFinite(lastUsed))
           entry.lastUsed = Math.max(entry.lastUsed, lastUsed);
         previews.set(entry.tabId, entry);
       }
     }
-    for (const session of (stored[SESSIONS_KEY] || []) as IPreviewSession[]) {
+    for (const session of (storedSession[SESSIONS_KEY] ||
+      []) as IPreviewSession[]) {
       if (
         typeof session.token === "string" &&
         Array.isArray(session.tabIds) &&
@@ -356,13 +373,29 @@ async function loadState(): Promise<void> {
     }
     await saveCache();
     await saveSessions();
+    await chrome.storage.session.remove([CACHE_KEY, USAGE_KEY]);
     scheduleCapture();
   } catch (error) {
     available = false;
     previews.clear();
     sessions.clear();
-    log("[Tab preview session storage unavailable]", String(error));
+    log("[Tab preview storage unavailable]", String(error));
   }
+}
+
+function clearCachedPreviews(): void {
+  for (const ownerTabId of restoredOwners) shownOwners.delete(ownerTabId);
+  restoredOwners.clear();
+  previews.clear();
+  sessions.clear();
+}
+
+async function clearStoredPreviews(): Promise<void> {
+  await Promise.all([
+    chrome.storage.local.remove([CACHE_KEY, USAGE_KEY]),
+    // Session entries include legacy screenshots and temporary access tokens.
+    chrome.storage.session.remove([CACHE_KEY, SESSIONS_KEY, USAGE_KEY]),
+  ]);
 }
 
 function invalidateTab(tabId: number, closing = false): void {
@@ -424,12 +457,12 @@ async function saveSessions(): Promise<void> {
 async function saveCache(): Promise<void> {
   if (!available) return;
   const [allBytes, ownBytes] = await Promise.all([
-    chrome.storage.session.getBytesInUse(null),
-    chrome.storage.session.getBytesInUse(CACHE_KEY),
+    chrome.storage.local.getBytesInUse(null),
+    chrome.storage.local.getBytesInUse(CACHE_KEY),
   ]);
   const budget = Math.max(
     0,
-    Math.min(MAX_CACHE_BYTES, SESSION_STORAGE_BUDGET - allBytes + ownBytes)
+    Math.min(MAX_CACHE_BYTES, LOCAL_STORAGE_BUDGET - allBytes + ownBytes)
   );
   const entries = [...previews.values()].sort(
     (a, b) => b.lastUsed - a.lastUsed
@@ -444,7 +477,7 @@ async function saveCache(): Promise<void> {
       bytes += entryBytes;
     }
   }
-  await chrome.storage.session.set({
+  await chrome.storage.local.set({
     [CACHE_KEY]: [...previews.values()],
     [USAGE_KEY]: getUsage(),
   });
@@ -458,15 +491,15 @@ function getUsage(): Record<string, number> {
 
 async function saveAccessState(): Promise<void> {
   if (available) {
-    await chrome.storage.session.set({
-      [USAGE_KEY]: getUsage(),
-      [SESSIONS_KEY]: [...sessions.values()],
-    });
+    await Promise.all([
+      chrome.storage.local.set({ [USAGE_KEY]: getUsage() }),
+      saveSessions(),
+    ]);
   }
 }
 
 function scheduleCapture(windowId?: number): void {
-  if (!enabled) return;
+  if (!enabled || clearingOnStartup) return;
   pendingWindowId = windowId;
   if (captureTimer !== undefined) clearTimeout(captureTimer);
   captureTimer = setTimeout(() => {
@@ -477,7 +510,7 @@ function scheduleCapture(windowId?: number): void {
 
 async function captureCurrentTab(windowId?: number): Promise<void> {
   await queue;
-  if (!enabled || !available) return;
+  if (!enabled || !available || clearingOnStartup) return;
   if (capturing) {
     scheduleCapture(windowId);
     return;
