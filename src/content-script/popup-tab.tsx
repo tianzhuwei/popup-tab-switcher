@@ -106,7 +106,25 @@ export function PopupTab(props: IProps) {
       >
         <CloseIcon />
       </button>
-      <TabIcon url={props.tab.url} title={props.tab.title} />
+      <span class="tab__favicon">
+        <TabIcon url={props.tab.url} title={props.tab.title} />
+        <Show when={props.hasPreview}>
+          <button
+            type="button"
+            class="tab__previewButton"
+            onClick={handlePreviewClick}
+            onMouseDown={(event) => event.preventDefault()}
+            onMouseEnter={() => props.onPreviewHover(true)}
+            onMouseLeave={() => props.onPreviewHover(false)}
+            onFocus={() => props.onPreviewFocus(true)}
+            onBlur={() => props.onPreviewFocus(false)}
+            title="Preview tab screenshot"
+            aria-label="Preview tab screenshot"
+          >
+            <PreviewIcon />
+          </button>
+        </Show>
+      </span>
       <div class="tab__details">
         <div ref={tabTextElement!} class="tab__text">
           <span class="tab__textContent" ref={tabTextContentElement!}>
@@ -125,22 +143,6 @@ export function PopupTab(props: IProps) {
           </Show>
         </div>
       </div>
-      <Show when={props.hasPreview}>
-        <button
-          type="button"
-          class="tab__previewButton"
-          onClick={handlePreviewClick}
-          onMouseDown={(event) => event.preventDefault()}
-          onMouseEnter={() => props.onPreviewHover(true)}
-          onMouseLeave={() => props.onPreviewHover(false)}
-          onFocus={() => props.onPreviewFocus(true)}
-          onBlur={() => props.onPreviewFocus(false)}
-          title="Preview tab screenshot"
-          aria-label="Preview tab screenshot"
-        >
-          <PreviewIcon />
-        </button>
-      </Show>
       <button
         type="button"
         class="tab__pinButton"

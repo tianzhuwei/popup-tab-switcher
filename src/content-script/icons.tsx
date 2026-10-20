@@ -139,23 +139,22 @@ export function PreviewIcon() {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
     >
-      <rect
-        x="3"
-        y="4"
-        width="18"
-        height="16"
-        rx="2"
-        stroke="currentColor"
-        stroke-width="1.5"
-      />
       <path
-        d="M4 16L9 11L13 15L16 12L20 16"
+        d="M6 17H5C3.9 17 3 16.1 3 15V5C3 3.9 3.9 3 5 3H15C16.1 3 17 3.9 17 5V6"
         stroke="currentColor"
-        stroke-width="1.5"
+        stroke-width="1.75"
         stroke-linecap="round"
         stroke-linejoin="round"
       />
-      <circle cx="16" cy="8" r="1.25" fill="currentColor" />
+      <rect
+        x="8"
+        y="8"
+        width="13"
+        height="13"
+        rx="2"
+        stroke="currentColor"
+        stroke-width="1.75"
+      />
     </svg>
   );
 }
