@@ -69,8 +69,11 @@ export default class TabRegistry {
     return Array.from(this.pinnedTabIds)
   }
 
-  restorePins(tabIds: number[]) {
+  restorePins(tabIds: number[], replace = false) {
     const existing = new Set(this.tabs.map((tab) => tab.id))
+    if (replace) {
+      this.pinnedTabIds = new Set()
+    }
     for (const id of tabIds) {
       if (existing.has(id)) {
         this.pinnedTabIds.add(id)
@@ -88,8 +91,10 @@ export default class TabRegistry {
   replaceTab(removedId: number, tab: ITab) {
     this.tabs = this.tabs.map((current) => current.id === removedId ? tab : current)
     this.removeFromInitialized(removedId)
-    if (this.pinnedTabIds.delete(removedId)) {
-      this.pinnedTabIds.add(tab.id)
+    if (this.pinnedTabIds.has(removedId)) {
+      this.pinnedTabIds = new Set(
+        this.getPinnedTabIds().map((id) => id === removedId ? tab.id : id)
+      )
       this.onPinnedUpdate(this.getPinnedTabIds())
     }
     this.onUpdate(this.tabs)
@@ -144,13 +149,19 @@ export default class TabRegistry {
 
   getTabsToShow(filter: (tab: ITab) => boolean = () => true): ITab[] {
     const recentTabs = this.tabs.filter(filter).reverse()
+    const tabsById = new Map(recentTabs.map((tab) => [tab.id, tab]))
     const pinnedTabs: ITab[] = []
     const unpinnedTabs: ITab[] = []
 
-    for (const tab of recentTabs) {
-      if (this.pinnedTabIds.has(tab.id)) {
+    for (const id of this.pinnedTabIds) {
+      const tab = tabsById.get(id)
+      if (tab) {
         pinnedTabs.push(tab)
-      } else {
+      }
+    }
+
+    for (const tab of recentTabs) {
+      if (!this.pinnedTabIds.has(tab.id)) {
         unpinnedTabs.push(tab)
       }
     }
@@ -158,7 +169,7 @@ export default class TabRegistry {
     // Keep the current and previous tabs available even when pins fill the limit.
     const tabLimit = this.numberOfTabsToShow || recentTabs.length
     const minimumUnpinnedTabs = recentTabs
-      .slice(0, Math.min(2, tabLimit))
+      .slice(0, 2)
       .filter((tab) => !this.pinnedTabIds.has(tab.id)).length
     const unpinnedSlots = Math.max(
       tabLimit - pinnedTabs.length,

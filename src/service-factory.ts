@@ -68,7 +68,7 @@ export class ServiceFactory {
           })
           ServiceFactory.pinRecovery = recovery
           ServiceFactory.registryCache = registry
-          registry.restorePins(recovery.recover(openTabs, pins))
+          registry.restorePins(recovery.recover(openTabs, pins), true)
           ServiceFactory.saveRegistry()
           log(`[Registry initialized]`, {registryTitles: registry.titles()})
           return registry
@@ -132,7 +132,7 @@ export class ServiceFactory {
         registry.getPinnedTabIds(),
         availableIds
       ) || []
-    registry.restorePins(recovered)
+    registry.restorePins(recovered, true)
     ServiceFactory.saveRegistry()
   }
 
@@ -151,6 +151,7 @@ export class ServiceFactory {
           if (!registry || !recovery) {
             continue
           }
+          recovery.syncPinOrder(registry.getPinnedTabIds())
           try {
             await chrome.storage.local.set({
               tabs: registry.getTabs(),

@@ -17,12 +17,16 @@ interface IStore {
   zoomFactor: number;
   selectedTabIndex: number;
   pinnedTabIds: Set<number>;
+  activeTabId: number | undefined;
+  previousTabId: number | undefined;
   tabProbabilities: Record<string, number>;
   tabPreviewIds: number[];
 }
 
 export function createPopupStore() {
   let hasRankingUpdate = false;
+  let openingTabIds: number[] = [];
+  let tabVisitRanks: Record<string, number> = {};
   const [store, setStore] = createStore<IStore>({
     tabs: [],
     isOpen: false,
@@ -30,6 +34,8 @@ export function createPopupStore() {
     zoomFactor: 1,
     selectedTabIndex: 0,
     pinnedTabIds: new Set(),
+    activeTabId: undefined,
+    previousTabId: undefined,
     tabProbabilities: {},
     tabPreviewIds: [],
   });
@@ -52,10 +58,7 @@ export function createPopupStore() {
       return;
     }
     log(`[syncStoreWithBackground model]`, model);
-    setStore({
-      zoomFactor: model.zoomFactor,
-      pinnedTabIds: new Set(model.pinnedTabIds),
-    });
+    setStore("zoomFactor", model.zoomFactor);
     setStore("settings", reconcile(model.settings));
     if (!store.isOpen) hasRankingUpdate = false;
     if (!hasRankingUpdate)
@@ -63,33 +66,51 @@ export function createPopupStore() {
 
     if (!store.isOpen) {
       // Keep this opening's order and probabilities stable across shortcut repeats.
-      setStore("tabProbabilities", reconcile(model.tabProbabilities || {}));
-      setStore("tabs", reconcile(model.tabs));
-      let targetIndex = 0;
-      if (model.activeTabId !== undefined) {
-        const foundIndex = model.tabs.findIndex(
-          (tab) => tab.id === model.activeTabId
-        );
-        if (foundIndex !== -1) {
-          targetIndex = foundIndex;
-        }
-      }
-      setStore("selectedTabIndex", targetIndex);
+      const pinnedTabIds = new Set(model.pinnedTabIds);
+      tabVisitRanks = model.tabVisitRanks || {};
+      const tabs = orderPopupTabs(
+        model.tabs,
+        pinnedTabIds,
+        model.activeTabId,
+        model.previousTabId,
+        model.tabProbabilities || {},
+        tabVisitRanks
+      );
+      openingTabIds = tabs.map((tab) => tab.id!);
+      const activeIndex = tabs.findIndex((tab) => tab.id === model.activeTabId);
+      batch(() => {
+        setStore({
+          pinnedTabIds,
+          activeTabId: model.activeTabId,
+          previousTabId: model.previousTabId,
+          selectedTabIndex: Math.max(0, activeIndex),
+        });
+        setStore("tabProbabilities", reconcile(model.tabProbabilities || {}));
+        setStore("tabs", reconcile(tabs));
+      });
     }
     return model;
   };
 
   const applyRankingUpdate = (update: IPopupRankingUpdate): boolean => {
-    const selectedTabId = store.tabs[store.selectedTabIndex]?.id;
-    const selectedTabIndex = update.tabs.findIndex(
-      (tab) => tab.id === selectedTabId
+    const tabs = orderPopupTabs(
+      update.tabs,
+      store.pinnedTabIds,
+      store.activeTabId,
+      store.previousTabId,
+      update.tabProbabilities,
+      update.tabVisitRanks || {}
     );
+    const selectedTabId = store.tabs[store.selectedTabIndex]?.id;
+    const selectedTabIndex = tabs.findIndex((tab) => tab.id === selectedTabId);
     if (selectedTabId === undefined || selectedTabIndex === -1) {
       return false;
     }
     hasRankingUpdate = true;
+    tabVisitRanks = update.tabVisitRanks || {};
+    openingTabIds = tabs.map((tab) => tab.id!);
     batch(() => {
-      setStore("tabs", reconcile(update.tabs));
+      setStore("tabs", reconcile(tabs));
       setStore("tabProbabilities", reconcile(update.tabProbabilities));
       setStore("tabPreviewIds", reconcile(update.tabPreviewIds));
       setStore("selectedTabIndex", selectedTabIndex);
@@ -106,24 +127,41 @@ export function createPopupStore() {
       newPinnedTabIds.add(tabId);
     }
     const selectedTabId = store.tabs[store.selectedTabIndex]?.id;
-    const newTabs = [
-      ...store.tabs.filter((tab) => newPinnedTabIds.has(tab.id ?? -1)),
-      ...store.tabs.filter((tab) => !newPinnedTabIds.has(tab.id ?? -1)),
-    ];
+    const byId = new Map(store.tabs.map((tab) => [tab.id, tab]));
+    // Restore the opening's candidate slots when a pin is removed again.
+    const openingTabs = openingTabIds
+      .map((id) => byId.get(id))
+      .filter((tab): tab is chrome.tabs.Tab => tab !== undefined);
+    const newTabs = orderPopupTabs(
+      openingTabs,
+      newPinnedTabIds,
+      store.activeTabId,
+      store.previousTabId,
+      store.tabProbabilities,
+      tabVisitRanks
+    );
     const newSelectedIndex =
       selectedTabId !== undefined
         ? newTabs.findIndex((tab) => tab.id === selectedTabId)
         : store.selectedTabIndex;
-    setStore("pinnedTabIds", newPinnedTabIds);
-    setStore("tabs", newTabs);
-    if (newSelectedIndex >= 0) {
-      setStore("selectedTabIndex", newSelectedIndex);
-    }
+    batch(() => {
+      setStore("pinnedTabIds", newPinnedTabIds);
+      setStore("tabs", newTabs);
+      if (newSelectedIndex >= 0) {
+        setStore("selectedTabIndex", newSelectedIndex);
+      }
+    });
   };
 
   const isPinned = (tabId: number) => {
     return store.pinnedTabIds.has(tabId);
   };
+
+  const isProtected = (tabId: number | undefined) =>
+    tabId !== undefined &&
+    (isPinned(tabId) ||
+      tabId === store.activeTabId ||
+      tabId === store.previousTabId);
 
   const removeTab = (tabId: number) => {
     const removedIndex = store.tabs.findIndex((tab) => tab.id === tabId);
@@ -153,6 +191,7 @@ export function createPopupStore() {
     selectTabIndex,
     togglePin,
     isPinned,
+    isProtected,
     removeTab,
   };
 
@@ -178,6 +217,47 @@ export function createPopupStore() {
     }
     setStore("selectedTabIndex", index);
   }
+}
+
+function orderPopupTabs(
+  tabs: chrome.tabs.Tab[],
+  pinnedTabIds: Set<number>,
+  activeTabId: number | undefined,
+  previousTabId: number | undefined,
+  probabilities: Record<string, number>,
+  visitRanks: Record<string, number>
+): chrome.tabs.Tab[] {
+  const byId = new Map(tabs.map((tab) => [tab.id, tab]));
+  const leading: chrome.tabs.Tab[] = [];
+  const protectedIds = new Set<number>();
+  for (const id of [...pinnedTabIds, activeTabId, previousTabId]) {
+    const tab = id !== undefined ? byId.get(id) : undefined;
+    if (tab && id !== undefined && !protectedIds.has(id)) {
+      leading.push(tab);
+      protectedIds.add(id);
+    }
+  }
+  const ordinary = tabs.filter(
+    (tab) => tab.id === undefined || !protectedIds.has(tab.id)
+  );
+  const hasPrediction = (tab: chrome.tabs.Tab) =>
+    typeof probabilities[String(tab.id)] === "number";
+  const compareVisits = (left: chrome.tabs.Tab, right: chrome.tabs.Tab) =>
+    (visitRanks[String(left.id)] ?? Number.MAX_SAFE_INTEGER) -
+    (visitRanks[String(right.id)] ?? Number.MAX_SAFE_INTEGER);
+  const ranked = ordinary
+    .filter(hasPrediction)
+    .sort(
+      (left, right) =>
+        probabilities[String(right.id)] - probabilities[String(left.id)] ||
+        compareVisits(left, right)
+    );
+  if (!ranked.length) return [...leading, ...ordinary.sort(compareVisits)];
+  let rankIndex = 0;
+  return [
+    ...leading,
+    ...ordinary.map((tab) => (hasPrediction(tab) ? ranked[rankIndex++] : tab)),
+  ];
 }
 
 function rangedIncrement(

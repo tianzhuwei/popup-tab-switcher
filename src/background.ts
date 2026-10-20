@@ -401,6 +401,7 @@ function messageHandlers(): Partial<IHandlers> {
       }
       return {
         tabs: ranked.tabs as chrome.tabs.Tab[],
+        tabVisitRanks: getTabVisitRanks(ranked.tabs, input),
         tabProbabilities: ranked.tabProbabilities,
         rankingPending: ranked.pending,
         tabPreviewIds:
@@ -560,6 +561,20 @@ function getRankingFingerprint(input: IRankingInput): string {
   ]);
 }
 
+function getTabVisitRanks(
+  tabs: chrome.tabs.Tab[],
+  input: IRankingInput
+): Record<string, number> {
+  const ranks = new Map(input.recentTabs.map((tab, index) => [tab.id, index]));
+  // Only visible tabs' ranks enter the content popup, never the full registry.
+  return Object.fromEntries(
+    tabs.map((tab) => [
+      String(tab.id),
+      ranks.get(tab.id!) ?? Number.MAX_SAFE_INTEGER,
+    ])
+  );
+}
+
 async function preparePopupRankingUpdate(
   ownerId: number,
   snapshot: IPopupSnapshot
@@ -597,6 +612,7 @@ async function preparePopupRankingUpdate(
   return {
     popupId: snapshot.popupId,
     tabs: ranked.tabs,
+    tabVisitRanks: getTabVisitRanks(ranked.tabs, input),
     tabProbabilities: ranked.tabProbabilities,
     tabPreviewIds,
   };

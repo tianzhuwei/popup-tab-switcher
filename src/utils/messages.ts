@@ -145,6 +145,7 @@ interface IGetModelResponse {
   pinnedTabIds: number[];
   activeTabId: number | undefined;
   previousTabId: number | undefined;
+  tabVisitRanks: Record<string, number>;
   tabProbabilities: Record<string, number>;
   tabPreviewIds: number[];
   rankingPending: boolean;
@@ -153,6 +154,7 @@ interface IGetModelResponse {
 export interface IPopupRankingUpdate {
   popupId: string;
   tabs: chrome.tabs.Tab[];
+  tabVisitRanks: Record<string, number>;
   tabProbabilities: Record<string, number>;
   tabPreviewIds: number[];
 }

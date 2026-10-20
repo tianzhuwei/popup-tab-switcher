@@ -5,6 +5,7 @@ interface IRecoveryTab {
   title: string
   index: number
   pending: boolean
+  pinOrder?: number
   closed?: boolean
 }
 
@@ -25,6 +26,8 @@ export interface IPinRecoveryState {
   tabBindings: {[key: string]: number}
   excludedTabIds: number[]
   claimedTabIds: number[]
+  pinOrders?: {[key: string]: number}
+  nextPinOrder?: number
 }
 
 function tabUrl(tab: ITab): string {
@@ -60,7 +63,10 @@ function activeRows(window: IRecoveryWindow): IRecoveryTab[] {
 
 /** Durable, unconsumed pins retain their complete original window cohort. */
 export class PinRecovery {
-  readonly state: IPinRecoveryState
+  readonly state: IPinRecoveryState & {
+    pinOrders: {[key: string]: number}
+    nextPinOrder: number
+  }
 
   private sameSession: boolean
 
@@ -73,6 +79,22 @@ export class PinRecovery {
   ) {
     const sameSession =
       saved?.version === 1 ? saved.sessionId === sessionId : legacySameSession
+    const savedPinOrders = {...saved?.pinOrders}
+    let nextPinOrder = Math.max(
+      saved?.nextPinOrder || 0,
+      ...Object.values(savedPinOrders).map((order) => order + 1),
+      ...(saved?.batches || []).flatMap((batch) =>
+        batch.windows.flatMap((window) =>
+          window.tabs.map((tab) => (tab.pinOrder ?? -1) + 1)
+        )
+      )
+    )
+    for (const id of pinnedTabIds) {
+      if (savedPinOrders[id] === undefined) {
+        savedPinOrders[id] = nextPinOrder
+        nextPinOrder += 1
+      }
+    }
     this.sameSession = sameSession
     this.state = {
       version: 1,
@@ -81,7 +103,9 @@ export class PinRecovery {
       windowBindings: sameSession ? saved?.windowBindings || {} : {},
       tabBindings: sameSession ? saved?.tabBindings || {} : {},
       excludedTabIds: sameSession ? saved?.excludedTabIds || [] : [],
-      claimedTabIds: sameSession ? saved?.claimedTabIds || [] : []
+      claimedTabIds: sameSession ? saved?.claimedTabIds || [] : [],
+      pinOrders: sameSession ? savedPinOrders : {},
+      nextPinOrder
     }
     if (!sameSession) {
       const pins = new Set(pinnedTabIds)
@@ -115,6 +139,7 @@ export class PinRecovery {
               tab.closed = false
               if (pins.delete(oldId)) {
                 tab.pending = true
+                tab.pinOrder = savedPinOrders[oldId]
               }
             }
           })
@@ -125,7 +150,8 @@ export class PinRecovery {
           url: tabUrl(tab),
           title: tab.title || '',
           index: tab.index,
-          pending: pins.has(tab.id)
+          pending: pins.has(tab.id),
+          pinOrder: pins.has(tab.id) ? savedPinOrders[tab.id] : undefined
         }))
       }))
       if (pins.size) {
@@ -133,6 +159,17 @@ export class PinRecovery {
           id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
           windows
         })
+      }
+    }
+    // Older pending cohorts did not store pin order; keep their fallback stable.
+    for (const batch of this.state.batches) {
+      for (const window of batch.windows) {
+        for (const tab of window.tabs) {
+          if (tab.pending && tab.pinOrder === undefined) {
+            tab.pinOrder = this.state.nextPinOrder
+            this.state.nextPinOrder += 1
+          }
+        }
       }
     }
   }
@@ -230,6 +267,7 @@ export class PinRecovery {
             this.state.tabBindings[`${bindingKey}:${row}`] = match.id
             if (!excluded.has(match.id)) {
               recovered.push(match.id)
+              this.state.pinOrders[match.id] = savedTab.pinOrder!
             }
           }
         }
@@ -254,10 +292,33 @@ export class PinRecovery {
         delete this.state.tabBindings[key]
       }
     }
-    return recovered
+    // Later restore batches must slot back among pins recovered earlier.
+    const pins = Array.from(new Set([...pinnedTabIds, ...recovered]))
+      .filter((id) => liveIds.has(id))
+    this.syncPinOrder(pins)
+    return pins.sort((a, b) =>
+      this.state.pinOrders[a] - this.state.pinOrders[b]
+    )
+  }
+
+  /** Manual pins append after both live and still-pending historical pins. */
+  syncPinOrder(pinnedTabIds: number[]): void {
+    const pins = new Set(pinnedTabIds)
+    for (const id of Object.keys(this.state.pinOrders)) {
+      if (!pins.has(Number(id))) {
+        delete this.state.pinOrders[id]
+      }
+    }
+    for (const id of pinnedTabIds) {
+      if (this.state.pinOrders[id] === undefined) {
+        this.state.pinOrders[id] = this.state.nextPinOrder
+        this.state.nextPinOrder += 1
+      }
+    }
   }
 
   cancel(tab: ITab, tabs: ITab[], closing: boolean): void {
+    delete this.state.pinOrders[tab.id]
     if (!this.state.excludedTabIds.includes(tab.id)) {
       this.state.excludedTabIds.push(tab.id)
     }
@@ -322,6 +383,11 @@ export class PinRecovery {
   }
 
   replace(removedId: number, addedId: number): void {
+    const order = this.state.pinOrders[removedId]
+    if (order !== undefined) {
+      this.state.pinOrders[addedId] = order
+      delete this.state.pinOrders[removedId]
+    }
     const index = this.state.excludedTabIds.indexOf(removedId)
     if (index > -1) {
       this.state.excludedTabIds[index] = addedId

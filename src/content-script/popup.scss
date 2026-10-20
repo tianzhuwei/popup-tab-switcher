@@ -63,7 +63,7 @@
     ),
     radial-gradient(
       ellipse at bottom right,
-      var(--card-violet-reflection),
+      var(--card-neutral-reflection),
       transparent 62%
     );
   box-shadow: var(--card-shadow);
@@ -98,6 +98,44 @@
   &::-webkit-scrollbar-thumb {
     border-radius: calc(var(--popup-unit) * 3);
     background: var(--scrollbar-thumb);
+  }
+}
+
+.card__tabList {
+  position: relative;
+  padding: calc(var(--popup-unit) * 4) 0;
+
+  &:empty {
+    padding: 0;
+  }
+}
+
+.card__sectionSurface {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  border-radius: calc(var(--popup-unit) * 12);
+  pointer-events: none;
+
+  &_fixed {
+    height: calc(
+      var(--tab-height) * var(--protected-count) + var(--popup-unit) * 8
+    );
+    background-color: var(--card-fixed-background);
+  }
+
+  &_candidates {
+    height: calc(
+      var(--tab-height) * var(--candidate-count) + var(--popup-unit) * 8
+    );
+    background-color: var(--card-candidates-background);
+  }
+
+  &_afterFixed {
+    top: calc(
+      var(--tab-height) * var(--protected-count) + var(--popup-unit) * 16
+    );
   }
 }
 
@@ -194,6 +232,11 @@
   outline: none;
   cursor: default;
   overflow: hidden;
+
+  &_groupStart {
+    // The visible 8px gap sits between two 4px group paddings.
+    margin-top: calc(var(--popup-unit) * 16);
+  }
 
   &:hover {
     background-color: var(--tab_hover-background);
@@ -350,17 +393,17 @@
   position: absolute;
   inset: calc(var(--popup-unit) * -3);
   box-sizing: border-box;
-  border: var(--popup-unit) solid rgba(151, 143, 244, 0.65);
-  border-top-color: rgba(119, 171, 255, 0.7);
-  border-left-color: rgba(119, 171, 255, 0.7);
+  border: var(--popup-unit) solid rgba(132, 168, 194, 0.65);
+  border-top-color: rgba(135, 190, 229, 0.7);
+  border-left-color: rgba(135, 190, 229, 0.7);
   border-radius: calc(var(--popup-unit) * 8);
   color: var(--tab_accent-color);
 
   &:hover,
   &:focus-visible {
     border-color: var(--tab_accent-color);
-    box-shadow: 0 0 0 var(--popup-unit) rgba(139, 165, 255, 0.14),
-      0 0 calc(var(--popup-unit) * 8) rgba(126, 154, 255, 0.24);
+    box-shadow: 0 0 0 var(--popup-unit) rgba(138, 183, 214, 0.14),
+      0 0 calc(var(--popup-unit) * 8) rgba(131, 183, 221, 0.24);
   }
 }
 

@@ -7,6 +7,7 @@ interface IProps {
   isActive: boolean;
   isReducedMotion: boolean;
   isPinned: boolean;
+  isGroupStart: boolean;
   probability?: number;
   hasPreview: boolean;
   tab: chrome.tabs.Tab;
@@ -93,6 +94,7 @@ export function PopupTab(props: IProps) {
       data-tab-id={props.tab.id}
       classList={{
         tab_selected: props.isSelected,
+        tab_groupStart: props.isGroupStart,
       }}
       onClick={props.onClick}
       onMouseEnter={props.onHover}

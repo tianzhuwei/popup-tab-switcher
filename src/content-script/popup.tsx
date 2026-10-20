@@ -1,5 +1,12 @@
 import { For, render, Show } from "solid-js/web";
-import { createEffect, createSignal, on, onCleanup, onMount } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+  onMount,
+} from "solid-js";
 import styles from "./popup.scss";
 import {
   contentScriptStarted,
@@ -47,8 +54,12 @@ function Popup({ element }: IProps) {
     selectTabIndex,
     togglePin,
     isPinned,
+    isProtected,
     removeTab,
   } = createPopupStore();
+  const protectedTabCount = createMemo(
+    () => store.tabs.filter((tab) => isProtected(tab.id)).length
+  );
   // Settings previews stay open when focus moves back to the settings panel.
   let isSettingsDemo = false;
   // Resolves the effective theme (auto follows the OS, or a manual choice).
@@ -239,62 +250,95 @@ function Popup({ element }: IProps) {
             onMouseMove={onMouseMoveOnCard}
           >
             <div class="card__tabs">
-              <For each={store.tabs}>
-                {(tab, index) => (
-                  <PopupTab
-                    tab={tab}
-                    isSelected={index() === store.selectedTabIndex}
-                    isActive={store.isOpen}
-                    isReducedMotion={isReducedMotion()}
-                    isPinned={isPinned(tab.id!)}
-                    probability={store.tabProbabilities[String(tab.id)]}
-                    hasPreview={
-                      isManualPreviewEnabled() &&
-                      tab.id !== undefined &&
-                      store.tabPreviewIds.includes(tab.id)
-                    }
-                    onPreviewHover={(hovered) => {
-                      if (hovered && !isRankingHoverSuppressed) {
-                        setPreviewHoveredTabId(tab.id);
-                      } else if (previewHoveredTabId() === tab.id) {
-                        setPreviewHoveredTabId(undefined);
-                      }
-                    }}
-                    onPreviewFocus={(focused) => {
-                      if (focused) {
-                        setPreviewFocusedTabId(tab.id);
-                      } else if (previewFocusedTabId() === tab.id) {
-                        setPreviewFocusedTabId(undefined);
-                      }
-                    }}
-                    onTogglePin={() => {
-                      suppressAutoClose();
-                      snapshotTabPositions();
-                      togglePin(tab.id!);
-                    }}
-                    onHover={() => {
-                      if (
-                        store.settings.isHoverSelectingTab &&
-                        isHoverSelectionReady &&
-                        !isRankingHoverSuppressed
-                      ) {
-                        selectTabIndex(index());
-                      }
-                    }}
-                    onClose={() => {
-                      if (tab.id !== undefined) {
-                        suppressAutoClose();
-                        removeTab(tab.id);
-                      }
-                    }}
-                    onClick={() => {
-                      switchTo(tab);
-                    }}
-                    textScrollSpeed={store.settings.textScrollSpeed}
-                    textScrollDelay={store.settings.textScrollDelay}
+              <div
+                class="card__tabList"
+                style={{
+                  "--protected-count": String(protectedTabCount()),
+                  "--candidate-count": String(
+                    store.tabs.length - protectedTabCount()
+                  ),
+                }}
+              >
+                <Show when={protectedTabCount() > 0}>
+                  <div
+                    class="card__sectionSurface card__sectionSurface_fixed"
+                    aria-hidden="true"
                   />
-                )}
-              </For>
+                </Show>
+                <Show when={store.tabs.length > protectedTabCount()}>
+                  <div
+                    class="card__sectionSurface card__sectionSurface_candidates"
+                    classList={{
+                      card__sectionSurface_afterFixed: protectedTabCount() > 0,
+                    }}
+                    aria-hidden="true"
+                  />
+                </Show>
+                <For each={store.tabs}>
+                  {(tab, index) => (
+                    <PopupTab
+                      tab={tab}
+                      isSelected={index() === store.selectedTabIndex}
+                      isActive={store.isOpen}
+                      isReducedMotion={isReducedMotion()}
+                      isPinned={isPinned(tab.id!)}
+                      isGroupStart={
+                        protectedTabCount() > 0 &&
+                        index() === protectedTabCount()
+                      }
+                      probability={
+                        isProtected(tab.id)
+                          ? undefined
+                          : store.tabProbabilities[String(tab.id)]
+                      }
+                      hasPreview={
+                        isManualPreviewEnabled() &&
+                        tab.id !== undefined &&
+                        store.tabPreviewIds.includes(tab.id)
+                      }
+                      onPreviewHover={(hovered) => {
+                        if (hovered && !isRankingHoverSuppressed) {
+                          setPreviewHoveredTabId(tab.id);
+                        } else if (previewHoveredTabId() === tab.id) {
+                          setPreviewHoveredTabId(undefined);
+                        }
+                      }}
+                      onPreviewFocus={(focused) => {
+                        if (focused) {
+                          setPreviewFocusedTabId(tab.id);
+                        } else if (previewFocusedTabId() === tab.id) {
+                          setPreviewFocusedTabId(undefined);
+                        }
+                      }}
+                      onTogglePin={() => {
+                        suppressAutoClose();
+                        snapshotTabPositions();
+                        togglePin(tab.id!);
+                      }}
+                      onHover={() => {
+                        if (
+                          store.settings.isHoverSelectingTab &&
+                          isHoverSelectionReady &&
+                          !isRankingHoverSuppressed
+                        ) {
+                          selectTabIndex(index());
+                        }
+                      }}
+                      onClose={() => {
+                        if (tab.id !== undefined) {
+                          suppressAutoClose();
+                          removeTab(tab.id);
+                        }
+                      }}
+                      onClick={() => {
+                        switchTo(tab);
+                      }}
+                      textScrollSpeed={store.settings.textScrollSpeed}
+                      textScrollDelay={store.settings.textScrollDelay}
+                    />
+                  )}
+                </For>
+              </div>
             </div>
             <div class="card__footer">
               <button
@@ -369,7 +413,15 @@ function Popup({ element }: IProps) {
         ? numberOfTabsToShow
         : Math.max(store.tabs.length, 1);
     const footerHeight = 36;
-    const maxPopupHeight = visibleTabCount * rowHeight + footerHeight + 18;
+    // Group padding adds 8px; a second group adds its padding and an 8px gap.
+    const groupSpacing = store.tabs.length
+      ? 8 +
+        (protectedTabCount() > 0 && protectedTabCount() < store.tabs.length
+          ? 16
+          : 0)
+      : 0;
+    const maxPopupHeight =
+      visibleTabCount * rowHeight + footerHeight + 18 + groupSpacing;
     const popupBorderRadius = 16;
     const tabHorizontalPadding = 12;
     element.style.setProperty("--popup-unit", `${1 / zoomFactor}px`);
@@ -777,7 +829,7 @@ function Popup({ element }: IProps) {
           model.settings.isSwitchingToPreviouslyUsedTab &&
           model.previousTabId !== undefined
         ) {
-          const previousTabIndex = model.tabs.findIndex(
+          const previousTabIndex = store.tabs.findIndex(
             (tab) => tab.id === model.previousTabId
           );
           if (previousTabIndex !== -1) {
