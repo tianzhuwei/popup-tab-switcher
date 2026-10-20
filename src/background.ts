@@ -14,6 +14,7 @@ import { checkTab, ITab } from "./utils/check-tab";
 import { log } from "./utils/logger";
 import { ServiceFactory } from "./service-factory";
 import { getActiveTab } from "./background/get-active-tab";
+import { websiteGroupingHandlers } from "./background/website-grouping-handlers";
 import {
   getAvailableTabPreviewIds,
   initTabPreviews,
@@ -320,6 +321,7 @@ async function handleTabRemove(tabId: number) {
 
 function messageHandlers(): Partial<IHandlers> {
   return {
+    ...websiteGroupingHandlers,
     [Message.ContentScriptStarted]: async (_m, sender) => {
       log(`[ContentScriptStarted]`, sender.tab);
       const registry = await ServiceFactory.getTabRegistry();

@@ -238,6 +238,7 @@
   flex: 0 0 var(--popup-footer-height);
   align-items: center;
   justify-content: center;
+  gap: calc(var(--popup-unit) * 4);
   box-sizing: border-box;
   width: var(--popup-list-width, 100%);
   padding: calc(var(--popup-unit) * 4);
@@ -259,7 +260,7 @@
   }
 }
 
-.card__newTabButton {
+.card__actionButton {
   all: unset;
   box-sizing: border-box;
   display: flex;
@@ -271,16 +272,30 @@
   color: var(--tab-secondary-color);
   cursor: pointer;
 
-  &:hover,
+  &:not(:disabled):hover,
   &:focus-visible {
     background-color: var(--tab_hover-background);
     color: var(--tab_accent-color);
   }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: wait;
+  }
 }
 
-.card__newTabIcon {
+.card__actionIcon {
   width: calc(var(--popup-unit) * 16);
   height: calc(var(--popup-unit) * 16);
+}
+
+.card__actionStatus {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .tab {
@@ -528,7 +543,7 @@
   box-shadow: 0 0 0 var(--popup-unit) rgba(255, 255, 255, 0.65);
 }
 
-.card__newTabButton,
+.card__actionButton,
 .tab__closeButton,
 .tab__pinButton {
   &:focus-visible {
@@ -569,7 +584,7 @@
     transform: translateY(calc(var(--popup-unit) * -1));
   }
 
-  .card__newTabButton,
+  .card__actionButton,
   .tab__closeButton,
   .tab__previewButton,
   .tab__pinButton {
@@ -602,7 +617,7 @@
   .card_enhanced {
     .tab::before,
     .tab__favicon,
-    .card__newTabButton,
+    .card__actionButton,
     .tab__closeButton,
     .tab__previewButton,
     .tab__pinButton {

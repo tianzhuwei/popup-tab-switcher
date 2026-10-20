@@ -23,6 +23,7 @@ import { log } from "../utils/logger";
 import { createPopupStore } from "./popup-store";
 import { PopupTab } from "./popup-tab";
 import { PopupSelection } from "./popup-selection";
+import { WebsiteGrouping } from "./website-grouping";
 import { TabPreview } from "./tab-preview";
 import uuid from "../utils/uuid";
 import { SelectionAndFocus } from "./selection-and-focus";
@@ -109,6 +110,7 @@ function Popup({ element }: IProps) {
   let mouseIdleTimeout: number | undefined;
   const MOUSE_IDLE_DURATION = 3000;
   let suppressAutoCloseUntil = 0;
+  let isGroupingBusy = false;
   let prevTabRects: Map<number, DOMRect> | null = null;
   let mousePosition: { x: number; y: number } | undefined;
   let popupAnchor: { x: number; y: number } | undefined;
@@ -368,13 +370,13 @@ function Popup({ element }: IProps) {
             >
               <button
                 type="button"
-                class="card__newTabButton"
+                class="card__actionButton"
                 title="New tab"
                 aria-label="New tab"
                 onClick={openNewTab}
               >
                 <svg
-                  class="card__newTabIcon"
+                  class="card__actionIcon"
                   width="16"
                   height="16"
                   viewBox="0 0 16 16"
@@ -389,6 +391,10 @@ function Popup({ element }: IProps) {
                   />
                 </svg>
               </button>
+              <WebsiteGrouping
+                isOpen={store.isOpen && !isSettingsDemo}
+                onBusyChange={setGroupingBusy}
+              />
             </div>
           </div>
           <Show when={store.isOpen && store.settings.isTabPreviewEnabled}>
@@ -897,6 +903,15 @@ function Popup({ element }: IProps) {
     closePopup();
   }
 
+  function setGroupingBusy(busy: boolean) {
+    isGroupingBusy = busy;
+    clearMouseIdleTimeout();
+    if (!busy && !isDisposed) {
+      suppressAutoClose();
+      resetMouseIdleTimeout();
+    }
+  }
+
   function setUpListeners() {
     element.addEventListener("click", onOverlayClick, { capture: true });
     window.addEventListener("keyup", onKeyUp, { capture: true });
@@ -1073,6 +1088,19 @@ function Popup({ element }: IProps) {
       !event.ctrlKey &&
       !event.metaKey &&
       !event.shiftKey;
+    const groupButton = event
+      .composedPath()
+      .find(
+        (target): target is HTMLButtonElement =>
+          target instanceof HTMLButtonElement &&
+          target.classList.contains("card__groupButton")
+      );
+    if (groupButton && (event.key === "Enter" || isPlainSpace)) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!event.repeat) groupButton.click();
+      return;
+    }
     const isPreviewButton = event
       .composedPath()
       .some(
@@ -1098,7 +1126,7 @@ function Popup({ element }: IProps) {
     if (!store.isOpen || store.settings.isStayingOpen) {
       return;
     }
-    if (Date.now() < suppressAutoCloseUntil) {
+    if (isGroupingBusy || Date.now() < suppressAutoCloseUntil) {
       return;
     }
     if (["Alt", "Control", "Meta"].includes(event.key)) {
@@ -1119,7 +1147,7 @@ function Popup({ element }: IProps) {
     if (isSettingsDemo) {
       return;
     }
-    if (Date.now() < suppressAutoCloseUntil) {
+    if (isGroupingBusy || Date.now() < suppressAutoCloseUntil) {
       return;
     }
     if (!isMouseOverCard || !store.settings.isStayingOpen) {
@@ -1133,7 +1161,7 @@ function Popup({ element }: IProps) {
   }
 
   function onMouseLeaveCard() {
-    if (Date.now() < suppressAutoCloseUntil) {
+    if (isGroupingBusy || Date.now() < suppressAutoCloseUntil) {
       // Keep mouse state active during suppression to prevent premature closing
       isMouseOverCard = true;
       resetMouseIdleTimeout();
@@ -1152,7 +1180,7 @@ function Popup({ element }: IProps) {
 
   function resetMouseIdleTimeout() {
     clearMouseIdleTimeout();
-    if (isDisposed || !store.isOpen) {
+    if (isDisposed || !store.isOpen || isGroupingBusy) {
       return;
     }
     mouseIdleTimeout = window.setTimeout(() => {

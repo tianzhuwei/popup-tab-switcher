@@ -1,6 +1,10 @@
 import { ISettings } from "./settings";
 import { log } from "./logger";
 import {
+  IWebsiteGroupingResult,
+  IWebsiteGroupingState,
+} from "./website-grouping";
+import {
   ISmartRankingConfig,
   ISmartRankingProviders,
   ISmartRankingSettings,
@@ -24,6 +28,9 @@ export enum Message {
   TogglePinTab = "TogglePinTab",
   CloseTab = "CloseTab",
   CreateTab = "CreateTab",
+  GetWebsiteGroupingState = "GetWebsiteGroupingState",
+  GroupTabsByWebsite = "GroupTabsByWebsite",
+  UndoWebsiteGrouping = "UndoWebsiteGrouping",
   OpenTabPreview = "OpenTabPreview",
   GetTabPreview = "GetTabPreview",
   CloseTabPreview = "CloseTabPreview",
@@ -87,6 +94,18 @@ export function createTab() {
   return { type: Message.CreateTab } as const;
 }
 
+export function getWebsiteGroupingState() {
+  return { type: Message.GetWebsiteGroupingState } as const;
+}
+
+export function groupTabsByWebsite() {
+  return { type: Message.GroupTabsByWebsite } as const;
+}
+
+export function undoWebsiteGrouping() {
+  return { type: Message.UndoWebsiteGrouping } as const;
+}
+
 export function openTabPreview() {
   return { type: Message.OpenTabPreview } as const;
 }
@@ -128,6 +147,9 @@ interface IMessageTypeToObjectMap {
   [Message.TogglePinTab]: ReturnType<typeof togglePinTab>;
   [Message.CloseTab]: ReturnType<typeof closeTab>;
   [Message.CreateTab]: ReturnType<typeof createTab>;
+  [Message.GetWebsiteGroupingState]: ReturnType<typeof getWebsiteGroupingState>;
+  [Message.GroupTabsByWebsite]: ReturnType<typeof groupTabsByWebsite>;
+  [Message.UndoWebsiteGrouping]: ReturnType<typeof undoWebsiteGrouping>;
   [Message.OpenTabPreview]: ReturnType<typeof openTabPreview>;
   [Message.GetTabPreview]: ReturnType<typeof getTabPreview>;
   [Message.CloseTabPreview]: ReturnType<typeof closeTabPreview>;
@@ -167,6 +189,12 @@ type IMessageResponse<Message extends IMessage> = Message extends ReturnType<
   ? IPopupRankingUpdate | undefined
   : Message extends ReturnType<typeof getSettings>
   ? ISettings
+  : Message extends ReturnType<typeof getWebsiteGroupingState>
+  ? IWebsiteGroupingState
+  : Message extends
+      | ReturnType<typeof groupTabsByWebsite>
+      | ReturnType<typeof undoWebsiteGrouping>
+  ? IWebsiteGroupingResult
   : Message extends
       | ReturnType<typeof getSmartRankingSettings>
       | ReturnType<typeof setSmartRankingConfig>
