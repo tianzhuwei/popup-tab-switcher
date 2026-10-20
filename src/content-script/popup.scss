@@ -105,7 +105,7 @@
 .card__tabList {
   position: relative;
   isolation: isolate;
-  padding: calc(var(--popup-unit) * 4);
+  padding: calc(var(--popup-unit) * 4) calc(var(--popup-unit) * 4) 0;
 
   &:empty {
     padding: 0;
@@ -127,11 +127,17 @@
       var(--tab-height) * var(--protected-count) + var(--popup-unit) * 8
     );
     background-color: var(--card-fixed-background);
+
+    &.card__sectionSurface_last {
+      height: calc(
+        var(--tab-height) * var(--protected-count) + var(--popup-unit) * 4
+      );
+    }
   }
 
   &_candidates {
     height: calc(
-      var(--tab-height) * var(--candidate-count) + var(--popup-unit) * 8
+      var(--tab-height) * var(--candidate-count) + var(--popup-unit) * 4
     );
     background-color: var(--card-candidates-background);
   }
@@ -140,6 +146,14 @@
     top: calc(
       var(--tab-height) * var(--protected-count) + var(--popup-unit) * 16
     );
+  }
+
+  &_last {
+    border-bottom-right-radius: 0;
+    border-bottom-left-radius: 0;
+    box-shadow: inset var(--popup-unit) 0 0 var(--card-surface-border-color),
+      inset calc(var(--popup-unit) * -1) 0 0 var(--card-surface-border-color),
+      inset 0 var(--popup-unit) 0 var(--card-surface-highlight);
   }
 }
 
@@ -225,7 +239,24 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  padding-top: calc(var(--popup-unit) * 4);
+  width: var(--popup-list-width, 100%);
+  padding: calc(var(--popup-unit) * 4);
+  border-radius: 0 0 calc(var(--popup-unit) * 12) calc(var(--popup-unit) * 12);
+  background-color: var(--card-candidates-background);
+  box-shadow: inset var(--popup-unit) 0 0 var(--card-surface-border-color),
+    inset calc(var(--popup-unit) * -1) 0 0 var(--card-surface-border-color),
+    inset 0 calc(var(--popup-unit) * -1) 0 var(--card-surface-border-color);
+
+  &_fixed {
+    background-color: var(--card-fixed-background);
+  }
+
+  &_empty {
+    padding: calc(var(--popup-unit) * 2);
+    border-radius: calc(var(--popup-unit) * 12);
+    box-shadow: inset 0 0 0 var(--popup-unit) var(--card-surface-border-color),
+      inset 0 var(--popup-unit) 0 var(--card-surface-highlight);
+  }
 }
 
 .card__newTabButton {
@@ -234,18 +265,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: var(--popup-button-size);
+  width: calc(var(--popup-unit) * 56);
   height: var(--popup-button-size);
-  border: var(--popup-unit) solid var(--card-button-border-color);
-  border-radius: calc(var(--popup-unit) * 8);
-  background-color: var(--card-button-background);
-  box-shadow: 0 1px 3px rgba(41, 57, 98, 0.1);
-  color: var(--tab_accent-color);
+  border-radius: calc(var(--popup-unit) * 7);
+  color: var(--tab-secondary-color);
   cursor: pointer;
 
   &:hover,
   &:focus-visible {
-    background-color: var(--card-button-hover-background);
+    background-color: var(--tab_hover-background);
+    color: var(--tab_accent-color);
   }
 }
 

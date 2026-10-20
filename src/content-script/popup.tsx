@@ -251,7 +251,7 @@ function Popup({ element }: IProps) {
             onMouseLeave={onMouseLeaveCard}
             onMouseMove={onMouseMoveOnCard}
           >
-            <div class="card__tabs">
+            <div class="card__tabs" ref={observeTabViewport}>
               <div
                 class="card__tabList"
                 style={{
@@ -264,12 +264,16 @@ function Popup({ element }: IProps) {
                 <Show when={protectedTabCount() > 0}>
                   <div
                     class="card__sectionSurface card__sectionSurface_fixed"
+                    classList={{
+                      card__sectionSurface_last:
+                        store.tabs.length === protectedTabCount(),
+                    }}
                     aria-hidden="true"
                   />
                 </Show>
                 <Show when={store.tabs.length > protectedTabCount()}>
                   <div
-                    class="card__sectionSurface card__sectionSurface_candidates"
+                    class="card__sectionSurface card__sectionSurface_candidates card__sectionSurface_last"
                     classList={{
                       card__sectionSurface_afterFixed: protectedTabCount() > 0,
                     }}
@@ -353,7 +357,15 @@ function Popup({ element }: IProps) {
                 </For>
               </div>
             </div>
-            <div class="card__footer">
+            <div
+              class="card__footer"
+              classList={{
+                card__footer_fixed:
+                  store.tabs.length > 0 &&
+                  store.tabs.length === protectedTabCount(),
+                card__footer_empty: store.tabs.length === 0,
+              }}
+            >
               <button
                 type="button"
                 class="card__newTabButton"
@@ -402,6 +414,18 @@ function Popup({ element }: IProps) {
   //  By placing the structure and sync logic of at the start and all
   //  minor details like event handlers at the end we achieve better clarity.
 
+  function observeTabViewport(viewport: HTMLDivElement) {
+    const observer = new ResizeObserver(([entry]) => {
+      // A non-overlay scrollbar reserves space that the footer must also leave.
+      viewport.parentElement?.style.setProperty(
+        "--popup-list-width",
+        `${entry.contentRect.width}px`
+      );
+    });
+    observer.observe(viewport);
+    onCleanup(() => observer.disconnect());
+  }
+
   function setStylePropertiesThatDependOnPageZoom() {
     /*
      NOTE:
@@ -425,10 +449,10 @@ function Popup({ element }: IProps) {
       numberOfTabsToShow > 0
         ? numberOfTabsToShow
         : Math.max(store.tabs.length, 1);
-    const footerHeight = 28;
-    // Group padding adds 8px; a second group adds its padding and an 8px gap.
+    const footerHeight = store.tabs.length ? 32 : 28;
+    // The last group's bottom padding is shared with the integrated footer.
     const groupSpacing = store.tabs.length
-      ? 8 +
+      ? 4 +
         (protectedTabCount() > 0 && protectedTabCount() < store.tabs.length
           ? 16
           : 0)
