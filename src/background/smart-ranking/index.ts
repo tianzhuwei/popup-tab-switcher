@@ -16,6 +16,7 @@ import {
   applyRanking,
   createRankingInput,
   createRankingPlan,
+  decayCount,
   getPublicTabMetadata,
   IDomainUsage,
   IRankingInput,
@@ -663,8 +664,20 @@ async function observeActiveTab(): Promise<void> {
 function recordVisit(tabId: number, domain: string): void {
   if (lastObserved?.id === tabId && lastObserved.domain === domain) return;
   const history = usage.get(domain) || { visits: 0, lastVisit: 0, from: {} };
-  history.visits = Math.min(10000, history.visits + 1);
-  history.lastVisit = Date.now();
+  const now = Date.now();
+  // Rebase every counter before advancing their shared decay timestamp.
+  history.visits = Math.min(
+    10000,
+    decayCount(history.visits, history.lastVisit, now) + 1
+  );
+  for (const source of Object.keys(history.from)) {
+    history.from[source] = decayCount(
+      history.from[source],
+      history.lastVisit,
+      now
+    );
+  }
+  history.lastVisit = now;
   if (lastObserved && lastObserved.id !== tabId) {
     history.from[lastObserved.domain] = Math.min(
       10000,

@@ -26,12 +26,14 @@ transform animation (skipped for reduced motion).
 - `../../utils/smart-ranking.ts`: configuration types and official endpoint
   validation shared with the settings page.
 
-Only candidates with a probability of at least 15% are promoted, sorted by
-descending probability, into the first reorderable slots; equal probabilities
-retain most-recently-used order. Other predicted tabs keep visit order. Pinned
-tabs, the current tab, the previously used tab, and tabs without predictions
+All predicted ordinary candidates are sorted by descending probability into
+the reorderable slots; equal probabilities, including zeros, retain
+most-recently-used order. Pinned tabs, the current tab, the previously used tab, and tabs without predictions
 (such as local or private pages) keep their original positions. Domain
-statistics decay with a two-week half-life. When the current page is private,
+statistics decay with a two-week half-life. Before a new visit is counted,
+existing visit and transition counts are decayed to that same timestamp, so
+returning to a domain does not restore the weight of old history.
+When the current page is private,
 ranking still runs with a placeholder current page. Predictions assume the user has opened the tab switcher
 and is ready to select one of the supplied candidate tabs. The displayed
 percentages are model probabilities among those candidates, renormalized when a

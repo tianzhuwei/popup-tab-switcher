@@ -4,8 +4,6 @@ import { ITab } from "../../utils/check-tab";
 const MAX_CANDIDATES = 20;
 // Domain statistics lose half their weight every two weeks.
 const USAGE_HALF_LIFE = 14 * 24 * 60 * 60_000;
-// Only clearly likely tabs move; the rest keep their memorable visit order.
-const MIN_PROMOTION_PROBABILITY = 0.15;
 const PRIVATE_PAGE = { title: "Private or browser page", domain: "private" };
 
 export interface IDomainUsage {
@@ -167,9 +165,9 @@ export function createRankingPlan(
 }
 
 /**
- * Promotes clearly likely tabs (sorted by probability) into the first
- * reorderable slots. Pinned tabs, the current and previous tabs, tabs without
- * predictions and unlikely tabs keep their positions and visit order.
+ * Sorts predicted candidates by probability, breaking ties by visit order.
+ * Pinned tabs, the current and previous tabs, and tabs without predictions
+ * keep their original positions.
  */
 export function applyRanking(
   input: IRankingInput,
@@ -182,31 +180,20 @@ export function applyRanking(
   ]);
   const getProbability = (tab: ITab) => probabilities[`tab_${tab.id}`];
   const slots: number[] = [];
-  const ranked: ITab[] = [];
   input.visibleTabs.forEach((tab, index) => {
     if (!protectedIds.has(tab.id) && typeof getProbability(tab) === "number") {
       slots.push(index);
-      ranked.push(tab);
     }
   });
-  const visibleIds = new Set(input.visibleTabs.map((tab) => tab.id));
-  // Likely tabs beyond the visible limit may replace the least likely rows.
-  const hidden = input.recentTabs.filter(
-    (tab) =>
-      !visibleIds.has(tab.id) &&
-      !protectedIds.has(tab.id) &&
-      typeof getProbability(tab) === "number"
-  );
-  const promoted = [...ranked, ...hidden]
-    .filter((tab) => getProbability(tab) >= MIN_PROMOTION_PROBABILITY)
-    // Stable sorting preserves visit order when probabilities are equal.
+  if (!slots.length) return input.visibleTabs;
+  // Include candidates beyond the visible limit, starting in visit order.
+  const ordered = input.recentTabs
+    .filter(
+      (tab) =>
+        !protectedIds.has(tab.id) && typeof getProbability(tab) === "number"
+    )
+    // Stable sorting preserves visit order for equal probabilities, including zero.
     .sort((left, right) => getProbability(right) - getProbability(left));
-  if (!promoted.length) return input.visibleTabs;
-  const promotedIds = new Set(promoted.map((tab) => tab.id));
-  const ordered = [
-    ...promoted,
-    ...ranked.filter((tab) => !promotedIds.has(tab.id)),
-  ].slice(0, slots.length);
   const result = input.visibleTabs.slice();
   slots.forEach((slot, index) => {
     result[slot] = ordered[index];

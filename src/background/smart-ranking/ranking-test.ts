@@ -43,7 +43,7 @@ describe("smart ranking policy", () => {
       assert.deepStrictEqual(ids(result), [1, 2, 3, 5, 4]);
     });
 
-    it("does not reorder when no candidate is clearly likely", () => {
+    it("sorts candidates even when every probability is below 15%", () => {
       const tabs = [
         tab(1, "https://a.com"),
         tab(2, "https://b.com"),
@@ -56,10 +56,10 @@ describe("smart ranking policy", () => {
         tab_4: 0.12,
         tab_5: 0.14,
       });
-      assert.deepStrictEqual(ids(result), [1, 2, 3, 4, 5]);
+      assert.deepStrictEqual(ids(result), [1, 2, 5, 4, 3]);
     });
 
-    it("promotes only likely tabs and keeps the rest in visit order", () => {
+    it("sorts both high and low probabilities in descending order", () => {
       const tabs = [
         tab(1, "https://a.com"),
         tab(2, "https://b.com"),
@@ -72,7 +72,24 @@ describe("smart ranking policy", () => {
         tab_4: 0.1,
         tab_5: 0.6,
       });
-      assert.deepStrictEqual(ids(result), [1, 2, 5, 3, 4]);
+      assert.deepStrictEqual(ids(result), [1, 2, 5, 4, 3]);
+    });
+
+    it("uses visit order for equal probabilities, including zero", () => {
+      const tabs = Array.from({ length: 6 }, (_, index) =>
+        tab(index + 1, `https://site${index + 1}.com`)
+      );
+      const value = {
+        ...input(tabs),
+        visibleTabs: [...tabs.slice(0, 2), ...tabs.slice(2).reverse()],
+      };
+      const result = applyRanking(value, {
+        tab_3: 0.1,
+        tab_4: 0.1,
+        tab_5: 0,
+        tab_6: 0,
+      });
+      assert.deepStrictEqual(ids(result), [1, 2, 3, 4, 5, 6]);
     });
 
     it("leaves pinned tabs in place", () => {
