@@ -14,7 +14,7 @@ interface IProps {
   onClick: () => void;
   onHover: () => void;
   onTogglePin: () => void;
-  onClose: () => void;
+  onClose: (event: MouseEvent) => void;
   onPreviewHover: (isHovered: boolean) => void;
   onPreviewFocus: (isFocused: boolean) => void;
   textScrollSpeed: number;
@@ -78,7 +78,7 @@ export function PopupTab(props: IProps) {
   function handleCloseClick(e: MouseEvent) {
     e.stopPropagation();
     e.preventDefault();
-    props.onClose();
+    props.onClose(e);
   }
 
   function handlePreviewClick(e: MouseEvent) {

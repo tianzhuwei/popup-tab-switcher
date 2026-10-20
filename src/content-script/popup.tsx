@@ -1,5 +1,6 @@
 import { For, render, Show } from "solid-js/web";
 import {
+  batch,
   createEffect,
   createMemo,
   createSignal,
@@ -25,6 +26,7 @@ import { PopupTab } from "./popup-tab";
 import { PopupSelection } from "./popup-selection";
 import { WebsiteGrouping } from "./website-grouping";
 import { TabPreview } from "./tab-preview";
+import { createTabCloseLayout } from "./tab-close-layout";
 import uuid from "../utils/uuid";
 import { SelectionAndFocus } from "./selection-and-focus";
 import { createThemeMode } from "../utils/use-theme-mode";
@@ -68,6 +70,9 @@ function Popup({ element }: IProps) {
   // Resolves the effective theme (auto follows the OS, or a manual choice).
   const isDark = createThemeMode(() => store.settings.themeMode);
   const [isVisible, setIsVisible] = createSignal(false);
+  const [interactionMode, setInteractionMode] = createSignal<
+    "tabs" | "footer" | "closing"
+  >("tabs");
   const [previewHoveredTabId, setPreviewHoveredTabId] = createSignal<number>();
   const [previewFocusedTabId, setPreviewFocusedTabId] = createSignal<number>();
   const [previewSessionRevision, setPreviewSessionRevision] = createSignal(0);
@@ -75,6 +80,7 @@ function Popup({ element }: IProps) {
     store.settings.isTabPreviewEnabled &&
     !store.settings.isTabPreviewAutoEnabled;
   const previewTab = () => {
+    if (interactionMode() !== "tabs") return undefined;
     if (store.settings.isTabPreviewAutoEnabled) {
       return store.tabs[store.selectedTabIndex];
     }
@@ -116,6 +122,16 @@ function Popup({ element }: IProps) {
   let popupAnchor: { x: number; y: number } | undefined;
   let cardPosition: { left: number; top: number } | undefined;
   let isHoverSelectionReady = true;
+  const tabCloseLayout = createTabCloseLayout({
+    element,
+    zoomFactor: () => store.zoomFactor,
+    isMotionEnabled,
+    isProtected,
+    onCloseStart: () => {
+      setInteractionMode("closing");
+      resetManualPreview();
+    },
+  });
 
   function snapshotTabPositions() {
     if (!isMotionEnabled()) {
@@ -150,6 +166,7 @@ function Popup({ element }: IProps) {
     popupTransition += 1;
     cancelPopupAnimation();
     cancelRowAnimations();
+    tabCloseLayout.reset();
     reducedMotion.removeEventListener("change", onMotionPreferenceChange);
     cleanUpListeners();
     clearMouseIdleTimeout();
@@ -222,6 +239,7 @@ function Popup({ element }: IProps) {
       if (!enabled) {
         cancelPopupAnimation();
         cancelRowAnimations();
+        tabCloseLayout.cancelMotion();
         if (!store.isOpen) {
           hideOverlay();
         }
@@ -280,7 +298,7 @@ function Popup({ element }: IProps) {
                 </Show>
                 <Show when={store.tabs.length > 0}>
                   <PopupSelection
-                    isActive={store.isOpen}
+                    isActive={store.isOpen && interactionMode() === "tabs"}
                     isMotionEnabled={isMotionEnabled()}
                     selectedTabId={store.tabs[store.selectedTabIndex]?.id}
                     selectedTabIndex={store.selectedTabIndex}
@@ -293,7 +311,10 @@ function Popup({ element }: IProps) {
                   {(tab, index) => (
                     <PopupTab
                       tab={tab}
-                      isSelected={index() === store.selectedTabIndex}
+                      isSelected={
+                        interactionMode() === "tabs" &&
+                        index() === store.selectedTabIndex
+                      }
                       isActive={store.isOpen}
                       isReducedMotion={isReducedMotion()}
                       isPinned={isPinned(tab.id!)}
@@ -327,22 +348,33 @@ function Popup({ element }: IProps) {
                       }}
                       onTogglePin={() => {
                         suppressAutoClose();
+                        tabCloseLayout.clearRelay();
+                        tabCloseLayout.cancelMotion();
                         snapshotTabPositions();
                         togglePin(tab.id!);
                       }}
                       onHover={() => {
-                        if (
-                          store.settings.isHoverSelectingTab &&
-                          isHoverSelectionReady &&
-                          !isRankingHoverSuppressed
-                        ) {
-                          selectTabIndex(index());
-                        }
+                        if (tabCloseLayout.isHolding()) return;
+                        batch(() => {
+                          if (
+                            store.settings.isHoverSelectingTab &&
+                            isHoverSelectionReady &&
+                            !isRankingHoverSuppressed
+                          ) {
+                            selectTabIndex(index());
+                          }
+                          setInteractionMode("tabs");
+                        });
                       }}
-                      onClose={() => {
-                        if (tab.id !== undefined) {
+                      onClose={(event) => {
+                        const tabId = tab.id;
+                        if (tabId !== undefined) {
                           suppressAutoClose();
-                          removeTab(tab.id);
+                          cancelPopupAnimation();
+                          cancelRowAnimations();
+                          tabCloseLayout.close(tabId, event, () =>
+                            removeTab(tabId)
+                          );
                         }
                       }}
                       onClick={() => {
@@ -360,6 +392,9 @@ function Popup({ element }: IProps) {
               classList={{
                 card__footer_empty: store.tabs.length === 0,
               }}
+              onMouseEnter={onFooterInteraction}
+              onMouseMove={onFooterInteraction}
+              onFocusIn={onFooterInteraction}
             >
               <div class="card__footerActions">
                 <button
@@ -512,6 +547,8 @@ function Popup({ element }: IProps) {
     if (!card) {
       return;
     }
+    // Closing keeps the actual hit boxes anchored for the rest of this opening.
+    if (tabCloseLayout.applyPosition()) return;
     if (store.settings.popupPosition !== "mouse" || !popupAnchor) {
       card.style.removeProperty("position");
       card.style.removeProperty("left");
@@ -560,6 +597,8 @@ function Popup({ element }: IProps) {
     if (isOpen) {
       selectionAndFocus.saveState();
       cancelPopupAnimation();
+      tabCloseLayout.reset();
+      setInteractionMode("tabs");
       closeWithoutAnimation = false;
       popupAnchor =
         store.settings.popupPosition === "mouse" &&
@@ -637,6 +676,7 @@ function Popup({ element }: IProps) {
     isMouseOverCard = false;
     clearMouseIdleTimeout();
     cancelRowAnimations();
+    tabCloseLayout.reset();
     const cardElement = element.shadowRoot?.querySelector<HTMLElement>(".card");
     const shouldAnimate = isMotionEnabled() && !closeWithoutAnimation;
     closeWithoutAnimation = false;
@@ -800,6 +840,7 @@ function Popup({ element }: IProps) {
     const isCurrent = () =>
       !isDisposed && generation === popupRequestGeneration && store.isOpen;
     if (isCurrent()) {
+      tabCloseLayout.reset();
       await syncStoreWithBackground(isCurrent, rankingOpening?.id);
       if (isCurrent()) {
         setStylePropertiesThatDependOnPageZoom();
@@ -815,6 +856,7 @@ function Popup({ element }: IProps) {
     rankingOpening = undefined;
     cancelRankingMotion();
     cancelRankingOpeningFrame();
+    tabCloseLayout.reset();
     isRankingHoverSuppressed = false;
     isSettingsDemo = false;
     resetManualPreview();
@@ -862,19 +904,24 @@ function Popup({ element }: IProps) {
         isRankingHoverSuppressed = false;
       }
       if (increment !== undefined) {
-        if (store.isOpen) {
-          selectNextTab(increment);
-        } else if (
-          model.settings.isSwitchingToPreviouslyUsedTab &&
-          model.previousTabId !== undefined
-        ) {
-          const previousTabIndex = store.tabs.findIndex(
-            (tab) => tab.id === model.previousTabId
-          );
-          if (previousTabIndex !== -1) {
-            selectTabIndex(previousTabIndex);
+        tabCloseLayout.clearRelay();
+        tabCloseLayout.cancelMotion();
+        batch(() => {
+          if (store.isOpen) {
+            selectNextTab(increment);
+          } else if (
+            model.settings.isSwitchingToPreviouslyUsedTab &&
+            model.previousTabId !== undefined
+          ) {
+            const previousTabIndex = store.tabs.findIndex(
+              (tab) => tab.id === model.previousTabId
+            );
+            if (previousTabIndex !== -1) {
+              selectTabIndex(previousTabIndex);
+            }
           }
-        }
+          setInteractionMode("tabs");
+        });
       }
       if (!wasOpen) ignoreRankingLayoutScroll(opening);
       openPopup();
@@ -905,6 +952,20 @@ function Popup({ element }: IProps) {
       suppressAutoClose();
       resetMouseIdleTimeout();
     }
+  }
+
+  function onFooterInteraction() {
+    setInteractionMode("footer");
+    resetManualPreview();
+  }
+
+  function selectFromKeyboard(increment: number) {
+    tabCloseLayout.clearRelay();
+    tabCloseLayout.cancelMotion();
+    batch(() => {
+      selectNextTab(increment);
+      setInteractionMode("tabs");
+    });
   }
 
   function setUpListeners() {
@@ -989,6 +1050,7 @@ function Popup({ element }: IProps) {
       : event.movementX !== 0 || event.movementY !== 0;
     lastPointerPosition = { x: event.clientX, y: event.clientY };
     if (hasMoved) {
+      tabCloseLayout.onPointerMove(event);
       onRankingInteraction(event);
       isRankingHoverSuppressed = false;
     }
@@ -1012,6 +1074,10 @@ function Popup({ element }: IProps) {
   }
 
   function onRankingInteraction(event: Event) {
+    if (event.isTrusted && event.type === "wheel") {
+      tabCloseLayout.clearRelay();
+      tabCloseLayout.cancelMotion();
+    }
     if (
       event.isTrusted &&
       rankingOpening &&
@@ -1022,6 +1088,9 @@ function Popup({ element }: IProps) {
   }
 
   function onRankingScroll(event: Event) {
+    if (tabCloseLayout.isAdjustingScroll()) return;
+    tabCloseLayout.clearRelay();
+    tabCloseLayout.cancelMotion();
     // Initial focus and row replacement can scroll without a user gesture.
     // Wheel, pointer and key input still lock immediately during this frame.
     if (!rankingOpening?.ignoreLayoutScroll) onRankingInteraction(event);
@@ -1044,6 +1113,11 @@ function Popup({ element }: IProps) {
   }
 
   function onOverlayClick(event: MouseEvent) {
+    if (tabCloseLayout.blocksClick(event)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     const cardElement = element.shadowRoot?.querySelector(".card");
     if (cardElement && event.composedPath().includes(cardElement)) {
       return;
@@ -1068,14 +1142,15 @@ function Popup({ element }: IProps) {
     const handlers: { [key: string]: () => void } = {
       Escape: () => closePopup(),
       Enter: () => {
+        if (interactionMode() !== "tabs") return;
         const selectedTab = store.tabs[store.selectedTabIndex];
         if (selectedTab) {
           switchTo(selectedTab);
         }
       },
-      ArrowUp: () => selectNextTab(-1),
-      ArrowDown: () => selectNextTab(1),
-      Tab: () => selectNextTab(event.shiftKey ? -1 : 1),
+      ArrowUp: () => selectFromKeyboard(-1),
+      ArrowDown: () => selectFromKeyboard(1),
+      Tab: () => selectFromKeyboard(event.shiftKey ? -1 : 1),
     };
     const isPlainSpace =
       event.key === " " &&
@@ -1083,17 +1158,18 @@ function Popup({ element }: IProps) {
       !event.ctrlKey &&
       !event.metaKey &&
       !event.shiftKey;
-    const groupButton = event
+    const actionButton = event
       .composedPath()
       .find(
         (target): target is HTMLButtonElement =>
           target instanceof HTMLButtonElement &&
-          target.classList.contains("card__groupButton")
+          target.classList.contains("card__actionButton")
       );
-    if (groupButton && (event.key === "Enter" || isPlainSpace)) {
+    if (actionButton && (event.key === "Enter" || isPlainSpace)) {
       event.preventDefault();
       event.stopPropagation();
-      if (!event.repeat) groupButton.click();
+      onFooterInteraction();
+      if (!event.repeat && !actionButton.disabled) actionButton.click();
       return;
     }
     const isPreviewButton = event
@@ -1118,7 +1194,11 @@ function Popup({ element }: IProps) {
 
   function onKeyUp(event: KeyboardEvent): void {
     log(`[onKeyUp event]`, event);
-    if (!store.isOpen || store.settings.isStayingOpen) {
+    if (
+      !store.isOpen ||
+      store.settings.isStayingOpen ||
+      interactionMode() !== "tabs"
+    ) {
       return;
     }
     if (isGroupingBusy || Date.now() < suppressAutoCloseUntil) {
